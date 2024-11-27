@@ -67,7 +67,11 @@ const checkExistingUser = async (credentials: IUser) : Promise <IUser | null> =>
         throw error
     }
 }
-
+/**
+ * 
+ * @param id 
+ * @returns 
+ */
 const verifyEmailUser = async(id: string): Promise<IUser | null> =>{
     try {
         const user  = await User.findByIdAndUpdate(id, {emailVerifyAt: Date.now()}).exec();
@@ -76,4 +80,26 @@ const verifyEmailUser = async(id: string): Promise<IUser | null> =>{
         throw error;
     }
 }
-export {getUserWithCredentials, createUser, checkExistingUser, verifyEmailUser};
+
+
+
+
+const deleteUser = async(id: string): Promise<IUser | null> =>{
+    try {
+        const user = await User.findByIdAndDelete(id, {new:true});
+        return user ? user : null;
+    } catch (error) {
+        throw error;
+    }
+}
+
+
+const updateUser = async(id: string, newInfo : IUser): Promise<IUser | null>=>{
+    try {
+        const user = await User.findByIdAndUpdate(id, newInfo, {new:true});
+        return user ? user : null;
+    } catch (error) {
+        throw error;
+    }
+}
+export {getUserWithCredentials, createUser, checkExistingUser, verifyEmailUser, deleteUser, updateUser};

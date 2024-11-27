@@ -2407,7 +2407,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"eslint@npm:^9.13.0":
+"eslint@npm:^9.15.0":
   version: 9.15.0
   resolution: "eslint@npm:9.15.0"
   dependencies:
@@ -4355,7 +4355,7 @@ __metadata:
     cookie-parser: "npm:^1.4.7"
     cors: "npm:^2.8.5"
     dotenv: "npm:^16.4.5"
-    eslint: "npm:^9.13.0"
+    eslint: "npm:^9.15.0"
     express: "npm:^4.21.1"
     express-async-handler: "npm:^1.2.0"
     express-validator: "npm:^7.2.0"

@@ -20,6 +20,10 @@ import {
 import { getOTP } from "../helpers/OTP.algo";
 import Handlebars from "handlebars";
 import emailSender from "../helpers/mail";
+
+/**
+ * Register user
+ */
 const storeUser = expressAsyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     const credentials: IUser = req.body;
@@ -96,6 +100,12 @@ const storeUser = expressAsyncHandler(
       .json({ status: "Success", message: "User created successfully!", OTPCode });
   }
 );
+
+
+/**
+ * 
+ * Auth user
+ */
 
 const login = expressAsyncHandler(async (req: Request, res: Response) => {
   const { emailOrPhone, password } = req.body;
