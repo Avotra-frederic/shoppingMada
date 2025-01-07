@@ -56,7 +56,7 @@ app.use((err: any, _req: Request, res: Response, next:NextFunction) => {
         return;
     }
 
-    console.error(err); // Log de l'erreur pour faciliter le debug
+    console.error(err); 
     res.status(500).json({ status: "Error", message: "Internal Server Error" });
 });
 
