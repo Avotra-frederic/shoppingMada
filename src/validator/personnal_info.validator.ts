@@ -21,6 +21,12 @@ const store_personnal_info_validator = [
     .isString()
     .withMessage("Gender must be a string"),
   body("adresse").notEmpty().withMessage("Adresse is required!"),
+  body("phoneNumber")
+    .notEmpty()
+    .withMessage("Phonenumber is required")
+    .matches(/^(?:(\+261)|0)(32|33|34|38|37)\d{7}$/)
+    .withMessage("Please enter a valid phone number"),
+ 
 ];
 
 

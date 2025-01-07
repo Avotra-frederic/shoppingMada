@@ -1,10 +1,9 @@
 import { NextFunction, Request, Response } from "express";
 import expressAsyncHandler from "express-async-handler";
-import fs from "fs"
-import path from "path"
 import {
   checkExistingUser,
   createUser,
+  getUser,
   getUserWithCredentials,
 } from "../service/user.service";
 import IUser from "../interface/user.interface";
@@ -18,12 +17,12 @@ import {
   get_user_group_name,
 } from "../service/user_group_member.service";
 import { getOTP } from "../helpers/OTP.algo";
-import Handlebars from "handlebars";
-import emailSender from "../helpers/mail";
+import sendEmail from "../helpers/mail";
 
 /**
  * Register user
  */
+
 const storeUser = expressAsyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
     const credentials: IUser = req.body;
@@ -31,7 +30,8 @@ const storeUser = expressAsyncHandler(
     if (existingUser) {
       res.status(401).json({
         status: "Failed",
-        message: "Couldn't to create user! email or phonenumber is already taken!",
+        message:
+          "Couldn't to create user! email or phonenumber is already taken!",
       });
       return;
     }
@@ -55,55 +55,35 @@ const storeUser = expressAsyncHandler(
     }
     await add_user_in_user_group(addUserIntoUserGroup as IUserGroupMember);
 
-    const OTPCode : string = getOTP(user.email);
-    const htmlTemplate = fs.readFileSync(path.join(__dirname,"..","..", "public","template","email.html"), "utf8");
-    const template = Handlebars.compile(htmlTemplate);
+    const { password, ...authUser } = credentials;
+    const userGroup = "Client";
+    const tokenPayload = { ...authUser, _id: user._id };
+    const token = jwt.sign(tokenPayload, process.env.TOKEN_SECRET as string, {
+      expiresIn: "24h",
+    });
+
+    res.cookie("refreshToken", token, {
+      httpOnly: true,
+    });
+
+    const OTPCode: string = getOTP(user.email);
+
     const data = {
       CODE_OTP: OTPCode,
-    }
+    };
 
-    const htmlContent = template(data);
-
-    const mailOption = {
-      from:process.env.EMAIL_USER,
-      to: credentials.email,
-      subject: "Verification email",
-      html: htmlContent,
-      attachements:[
-        {
-          filename:"background.png",
-          path: path.join(__dirname,"..","..","public","mail","background.png"),
-          cid:"background"
-        },
-        {
-          filename:"animated_header.gif",
-          path: path.join(__dirname,"..","..","public","mail","animated_header.gif"),
-          cid:"animated"
-        },
-        {
-          filename:"logo.png",
-          path: path.join(__dirname,"..","..","public","mail","logo.png"),
-          cid: "logo"
-        },
-        {
-          filename:"Beefree-logo.png",
-          path: path.join(__dirname,"..","..","public","mail","Beefree-logo.png"),
-          cid: "Beefree"
-        },
-      ]
-    }
-
-    await emailSender(mailOption);
-    
-    res
-      .status(201)
-      .json({ status: "Success", message: "User created successfully!", OTPCode });
-  }
+    await sendEmail(data, credentials.email);
+    const updatedUser = { ...authUser, userGroup };
+    res.status(201).json({
+      status: "Success",
+      message: "User created successfully!",
+      userInfo: updatedUser,
+    });
+  },
 );
 
-
 /**
- * 
+ *
  * Auth user
  */
 
@@ -128,6 +108,10 @@ const login = expressAsyncHandler(async (req: Request, res: Response) => {
     expiresIn: "1h",
   });
 
+  res.cookie("jwt", token, {
+    httpOnly: true,
+  });
+
   const userGroup = await get_user_group_name({ user_id: authUser._id });
   if (!userGroup) {
     res
@@ -136,7 +120,7 @@ const login = expressAsyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
-  const updatedUser = { ...authUser, userGroup, token };
+  const updatedUser = { ...authUser, userGroup};
 
   res.status(201).json({
     status: "Success",
@@ -145,4 +129,112 @@ const login = expressAsyncHandler(async (req: Request, res: Response) => {
   });
 });
 
-export { storeUser, login };
+const regenerateToken = expressAsyncHandler(
+  async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    const updatedUser = await getUser(user._id);
+
+    if (!updatedUser) {
+      res
+        .status(401)
+        .json({ status: "Failed", message: "User does not exist!" });
+      return;
+    }
+
+    const { password, ...authUser } = updatedUser;
+    const token = jwt.sign(authUser, process.env.TOKEN_SECRET as string, {
+      expiresIn: "1h",
+    });
+
+    res.cookie("jwt", token, {
+      httpOnly: true,
+    })
+
+    const userGroup = await get_user_group_name({
+      user_id: authUser._id as Types.ObjectId,
+    });
+    if (!userGroup) {
+      res
+        .status(401)
+        .json({ status: "Failed", message: "Cannot find group for user!" });
+      return;
+    }
+
+    const updatedUserInfo = { ...authUser, userGroup };
+
+    res.status(201).json({
+      status: "Success",
+      message: "token regenerate successfully",
+      userInfo: updatedUserInfo,
+    });
+  },
+);
+
+const getUserInfo = expressAsyncHandler(async (req: Request, res: Response) => {
+  try {
+    const user = (req as any).user;
+    const userInfo = await getUser(user._id);
+    if (!user) {
+      res.status(401).json({ status: "Failed", message: "Unauthorized!" });
+      return;
+    }
+
+    if (!userInfo) {
+      res
+        .status(403)
+        .json({ status: "Failed", message: "User does not exist" });
+      return;
+    }
+    res.status(200).json({ status: "Success", userInfo });
+  } catch (error) {
+    throw error;
+  }
+});
+
+const handleChangePassword = expressAsyncHandler(
+  async (req: Request, res: Response) => {
+    const credentials: IUser = req.body;
+    const user = await checkExistingUser(credentials);
+    if (!user) {
+      res
+        .status(400)
+        .json({ status: "Failed", message: "User does not exist!" });
+      return;
+    }
+    const OTPCode: string = getOTP(user.email);
+    const data = {
+      CODE_OTP: OTPCode,
+    };
+
+    await sendEmail(data, credentials.email);
+
+    const { password, ...authUser } = user;
+
+    const token = jwt.sign(authUser, process.env.TOKEN_SECRET as string, {
+      expiresIn: "1h",
+    });
+    const userGroup = await get_user_group_name({ user_id: authUser._id as Types.ObjectId });
+    if (!userGroup) {
+      res
+        .status(401)
+        .json({ status: "Failed", message: "Cannot find group for user!" });
+      return;
+    }
+
+    const updatedUser = { ...authUser, userGroup, token };
+
+    res.status(201).json({
+      status: "Success",
+      message: "login successfully",
+      userInfo: updatedUser,
+    });
+  },
+);
+
+const logout = expressAsyncHandler(async (req: Request, res: Response) => {
+  res.clearCookie("jwt");
+  res.clearCookie("refreshToken");
+  res.status(200).json({ status: "Success", message: "Logout successfully" });
+});
+
+export { storeUser, login, regenerateToken, getUserInfo, handleChangePassword,logout };

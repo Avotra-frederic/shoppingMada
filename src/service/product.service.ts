@@ -20,6 +20,15 @@ const getAllProduct = async(): Promise<IProduct| null> =>{
     }
 }
 
+const getBoutiksProduct =  async(owner_id: string): Promise<IProduct | null> =>{
+    try {
+        const product = await Product.find({owner_id: owner_id}).lean<IProduct>();
+        return product ? product : null;
+    } catch (error) {
+        throw error
+    }
+}
+
 const getAllProductInCategory = async(slug: string): Promise<IProduct | null> => {
     try {
             const products = await Product.find({category: slug}).lean<IProduct>();
@@ -100,3 +109,5 @@ const deleteVariant = async(id:string, variant_id:string): Promise<IProduct| nul
         throw error;
     }
 }
+
+export {create_product, getAllProduct, getAllProductInCategory,getProductById,deleteProduct,updateProduct,updateVariant,deleteVariant,getBoutiksProduct,addProductVariant}

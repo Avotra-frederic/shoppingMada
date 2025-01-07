@@ -3,11 +3,14 @@
   "packageManager": "yarn@4.5.3",
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/csurf": "^1.11.5",
     "agenda": "^5.0.0",
     "bcrypt": "^5.1.1",
     "bcryptjs": "^2.4.3",
+    "body-parser": "^1.20.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
+    "csurf": "^1.10.0",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "express-async-handler": "^1.2.0",
@@ -23,7 +26,8 @@
     "nodemailer": "^6.9.16",
     "nodemon": "^3.1.7",
     "ts-node": "^10.9.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "xss": "^1.0.15"
   },
   "scripts": {
     "dev": "nodemon -r dotenv/config src/index.ts",

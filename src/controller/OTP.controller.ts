@@ -12,10 +12,11 @@ const verifyOTPCode = expressAsyncHandler(async(req: Request, res:Response)=>{
         res.status(401).json({status:"Failed", message:"Invalid OTP code"});
         return;
     }
+    console.log("id users",(req as any).user._id);
 
     const userUpdate = await verifyEmailUser((req as any).user._id);
     if(!userUpdate){
-        res.status(401).json({status:"Failed", message:"An error as occured!"});
+        res.status(401).json({status:"Failed", message:"An error as occured!", error:(req as any).user._id});
         return;
     }
 

@@ -20,6 +20,9 @@ const BoutiksSheme = new Schema({
     logo:{
         type: String,
     },
+    issuer: {
+        type:String
+    },
     product_category : {
         type: [Types.ObjectId]
     },
@@ -27,6 +30,12 @@ const BoutiksSheme = new Schema({
         type: Types.ObjectId,
         ref: "User",
         required: true,
+    },
+    plan:{
+        type: String,
+        required: true,
+        enum: ["free", "pro"],
+        default: "free"
     }
 },{
     timestamps: true,

@@ -9,4 +9,7 @@ export default interface IBoutiks extends Document
     owner_id: Types.ObjectId | string,
     logo: string,
     product_category?: [Types.ObjectId | string];
+    adresse:String;
+    issuer?:string;
+    plan:string
 }

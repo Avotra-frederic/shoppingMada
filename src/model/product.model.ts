@@ -52,12 +52,16 @@ const ProductScheme = new Schema<IProduct>({
         type:[String],
         validate:[arrayLimit,"upload limit is reachable!"]
 
+    },
+    owner_id: {
+        type: Types.ObjectId,
+        ref: "User"
     }
 
 
 })
 
-const Product = models.PersonnalInfo || model<IProduct>("Product", ProductScheme);
+const Product = models.Product || model<IProduct>("Product", ProductScheme);
 export default Product;
 
 

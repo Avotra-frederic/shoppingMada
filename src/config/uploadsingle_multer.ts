@@ -22,4 +22,7 @@ const upload = multer({
     }
 }).single("image");
 
+const uploadImage = multer({storage}).array("image",10);
+
+export {uploadImage};
 export default upload;

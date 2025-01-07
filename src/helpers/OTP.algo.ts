@@ -23,7 +23,7 @@ const generateOTP = (position:number, timestamp: number): string=>{
 const getOTP =(email: string): string=>{
     const emailBinary = toBinary(email);
     const position = findBinaryInPI(emailBinary);
-    const timestamp = Math.floor(Date.now() / 60000);
+    const timestamp = Math.floor(Date.now() / 600000);
     return generateOTP(position,timestamp);
 }
 

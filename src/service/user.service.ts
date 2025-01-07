@@ -102,4 +102,14 @@ const updateUser = async(id: string, newInfo : IUser): Promise<IUser | null>=>{
         throw error;
     }
 }
-export {getUserWithCredentials, createUser, checkExistingUser, verifyEmailUser, deleteUser, updateUser};
+
+const getUser = async(id: string): Promise<IUser | null> => {
+    try {
+        const user = await User.findById(id).lean<IUser>();
+        return user ? user : null;
+    } catch (error) {
+        throw error;
+    }
+}
+
+export {getUserWithCredentials, createUser, checkExistingUser, verifyEmailUser, deleteUser, updateUser,getUser};

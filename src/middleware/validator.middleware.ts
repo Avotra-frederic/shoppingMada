@@ -5,7 +5,7 @@ import { validationResult } from "express-validator";
  const validator  =  expressAsyncHandler((req: Request, res: Response, next: NextFunction) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        res.status(400).json({ status: "Failed", errors: errors.array() });
+        res.status(422).json({ status: "Failed", errors: errors.array() });
         return;
     }
     next();

@@ -57,11 +57,11 @@ const get_personnal_info_by_id = async (
  * @return {*}  {(Promise<LeanPersonnalInfo | null>)}
  */
 const get_personnal_info_by_owner_id = async (
-  owner_id: string | Types.ObjectId
-): Promise<LeanPersonnalInfo | null> => {
+  owner_id: string | Types.ObjectId |any
+): Promise<IPersonalInfo | null> => {
   try {
     const personnalInfo = await PersonnalInfo.findOne({ owner_id })
-      .lean<LeanPersonnalInfo>()
+      .lean<IPersonalInfo>().populate("owner_id")
       .exec();
     if (personnalInfo) return personnalInfo;
     return null;
@@ -96,11 +96,31 @@ const search_personnal_info = async (keyword: string) : Promise<IPersonalInfo | 
   }
 };
 
+const completPersonnalInfo = async (id: string, data: IPersonalInfo): Promise<IPersonalInfo | null> => {
+  try {
+    const personnalInfo = await PersonnalInfo.findOneAndUpdate({owner_id: id},data,{new: true}).lean<IPersonalInfo>();
+    return personnalInfo ? personnalInfo : null;
+  } catch (error) {
+    throw error;
+  }
+};
+
+const removePersonnalInfo = async (id: string): Promise<IPersonalInfo | null> => {
+  try {
+    const personnalInfo = await PersonnalInfo.findByIdAndDelete(id).lean<IPersonalInfo>();
+    return personnalInfo ? personnalInfo : null;
+  } catch (error) {
+    throw error;
+  }
+};
+
 export {
     create_personnal_info,
     get_personnal_info,
     get_personnal_info_by_id,
     get_personnal_info_by_owner_id,
-    search_personnal_info
+    search_personnal_info,
+    completPersonnalInfo,
+    removePersonnalInfo
 };
 

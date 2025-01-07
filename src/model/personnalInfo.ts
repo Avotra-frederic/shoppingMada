@@ -10,6 +10,10 @@ const personalInfoSheme = new Schema<IPersonalInfo>({
         type: String,
         required:true,
     },
+    phoneNumber:{
+        type:String,
+        required:true
+    },
     gender:{
         type: String,
         required:true
@@ -19,6 +23,12 @@ const personalInfoSheme = new Schema<IPersonalInfo>({
         required:true
     },
     cin:{
+        type: String
+    },
+    frontImage:{
+        type: String
+    },
+    backImage:{
         type: String
     },
     owner_id:{
