@@ -1,4 +1,3 @@
-import { csrfProtection } from './../config/app';
 import { Router } from "express";
 import { getPersonalInfo, store_personnal_info, updatePersonnalInfo } from "../controller/personnal_info.controller";
 import { store_personnal_info_validator } from "../validator/personnal_info.validator";

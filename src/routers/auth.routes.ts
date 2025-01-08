@@ -3,8 +3,6 @@ import { login, logout, regenerateToken, storeUser } from "../controller/user.co
 import { registerValidator } from "../validator/user.validator";
 import validator from "../middleware/validator.middleware";
 import { auth, guest } from "../middleware/auth.middleware";
-import { csrfProtection } from "../config/app";
-
 const authRoutes = Router();
 
 authRoutes.post("/auth/register",registerValidator, validator, guest,storeUser)

@@ -19,9 +19,6 @@ import {
 import { getOTP } from "../helpers/OTP.algo";
 import sendEmail from "../helpers/mail";
 
-/**
- * Register user
- */
 
 const storeUser = expressAsyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
