@@ -10,5 +10,6 @@ export default interface IProduct extends Document{
     stock?: number,
     photos:[string],
     variant? : [{name: string,  additionalPrice: number, color?: string}],
-    owner_id: any
+    owner_id: any,
+    metadata?:any
 }

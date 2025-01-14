@@ -16,7 +16,7 @@ import mongoSanitize from "express-mongo-sanitize";
 import { default as CSRF } from "csrf";
 const csrf = new CSRF();
 const corsOption: cors.CorsOptions = {
-  origin: "http://localhost:5173",
+  origin: process.env.ALLOWED_ORIGIN as string,
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   credentials: true,
   allowedHeaders: ["Content-Type", "Authorization", "xsrf-token"],

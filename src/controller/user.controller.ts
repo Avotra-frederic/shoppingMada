@@ -79,10 +79,6 @@ const storeUser = expressAsyncHandler(
   },
 );
 
-/**
- *
- * Auth user
- */
 
 const login = expressAsyncHandler(async (req: Request, res: Response) => {
   const { emailOrPhone, password } = req.body;
@@ -210,6 +206,10 @@ const handleChangePassword = expressAsyncHandler(
     const token = jwt.sign(authUser, process.env.TOKEN_SECRET as string, {
       expiresIn: "1h",
     });
+
+    res.cookie("jwt", token, {
+      httpOnly: true,
+    })
     const userGroup = await get_user_group_name({ user_id: authUser._id as Types.ObjectId });
     if (!userGroup) {
       res
@@ -218,7 +218,7 @@ const handleChangePassword = expressAsyncHandler(
       return;
     }
 
-    const updatedUser = { ...authUser, userGroup, token };
+    const updatedUser = { ...authUser, userGroup, };
 
     res.status(201).json({
       status: "Success",
@@ -229,8 +229,8 @@ const handleChangePassword = expressAsyncHandler(
 );
 
 const logout = expressAsyncHandler(async (req: Request, res: Response) => {
-  res.clearCookie("jwt");
-  res.clearCookie("refreshToken");
+  res.clearCookie("jwt",{httpOnly: true});
+  res.clearCookie("refreshToken",{httpOnly: true});
   res.status(200).json({ status: "Success", message: "Logout successfully" });
 });
 
