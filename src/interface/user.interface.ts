@@ -7,6 +7,7 @@ export default interface IUser extends Document
     email:string,
     phonenumber:string,
     emailVerifyAt?:string,
-    password: string
+    password: string,
+    photos?: string,
 }
 export type LeanUser = Omit<IUser, '_id'> & { _id: Types.ObjectId };

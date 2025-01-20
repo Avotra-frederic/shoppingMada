@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import expressAsyncHandler from "express-async-handler";
 import IProduct from "../interface/product.interface";
-import { create_product, getAllProductInCategory, getAllProduct, getProductById, addProductVariant, getBoutiksProduct, deleteProduct } from "../service/product.service";
+import { create_product, getAllProductInCategory, getAllProduct, getProductById, addProductVariant, getBoutiksProduct, deleteProduct, deleteVariant, updateVariant } from "../service/product.service";
 import path from "path";
 import fs from "fs"
 
@@ -21,7 +21,7 @@ const getProduct = expressAsyncHandler(async(req: Request, res: Response)=>{
     const {category, id} = req.params
 
     const user = (req as any).user;
-    if( user){
+    if( user && !id){
         const product = await getBoutiksProduct(user._id);
         res.status(200).json({status:"Success", data: product});
         return;
@@ -91,5 +91,32 @@ const deleteBoutiksProduct = expressAsyncHandler(async(req: Request, res: Respon
 
 })
 
+const removeVariant = expressAsyncHandler(async(req: Request, res: Response)=>{
+    const {id, variant_id}= req.params;
+    const user = (req as any).user;
+    if(!user){
+        res.status(401).json({status:"Failed", message:"Unauthorized"});
+        return;
+    }
+    const product = await deleteVariant(id, variant_id);
+    if(!product){
+        res.status(400).json({status:"Failed", message:"An error as occured! please try again later"});
+        return;
+    }
 
-export {storeProduct, getProduct,addNewVariant, deleteBoutiksProduct};
+    res.status(201).json({status:"Success", message:"Product deleted successfully!", data: product});
+})
+
+const updateProductVariant = expressAsyncHandler(async(req: Request, res: Response)=>{
+    const {id, variant_id} = req.params;
+    const data = req.body;
+    const variant = await updateVariant(id, variant_id, data);
+    if(!variant){
+        res.status(400).json({status:"Failed",message:"An error as occured! please try again later"});
+        return;
+    }
+
+    res.status(201).json({status:"Success", message:"Product variant is added successfully!"});
+})
+
+export {storeProduct, getProduct,addNewVariant, deleteBoutiksProduct, removeVariant, updateProductVariant};

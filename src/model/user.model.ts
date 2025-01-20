@@ -24,6 +24,9 @@ const userScheme = new Schema<IUser>({
         type: String,
         required : true,
         minlength : 4
+    },
+    photos:{
+        type: String
     }
 },{
     timestamps: true

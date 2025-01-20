@@ -24,7 +24,7 @@ const BoutiksSheme = new Schema({
         type:String
     },
     product_category : {
-        type: [Types.ObjectId]
+        type: [String],
     },
     owner_id:{
         type: Types.ObjectId,

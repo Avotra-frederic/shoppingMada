@@ -3,8 +3,10 @@ import expressAsyncHandler from "express-async-handler";
 import {
   checkExistingUser,
   createUser,
+  deleteUser,
   getUser,
   getUserWithCredentials,
+  updateUser,
 } from "../service/user.service";
 import IUser from "../interface/user.interface";
 import bcrypt from "bcrypt";
@@ -21,7 +23,7 @@ import sendEmail from "../helpers/mail";
 
 
 const storeUser = expressAsyncHandler(
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request, res: Response) => {
     const credentials: IUser = req.body;
     const existingUser = await checkExistingUser(credentials);
     if (existingUser) {
@@ -56,10 +58,10 @@ const storeUser = expressAsyncHandler(
     const userGroup = "Client";
     const tokenPayload = { ...authUser, _id: user._id };
     const token = jwt.sign(tokenPayload, process.env.TOKEN_SECRET as string, {
-      expiresIn: "24h",
+      expiresIn: "1h",
     });
 
-    res.cookie("refreshToken", token, {
+    res.cookie("jwt", token, {
       httpOnly: true,
     });
 
@@ -234,4 +236,52 @@ const logout = expressAsyncHandler(async (req: Request, res: Response) => {
   res.status(200).json({ status: "Success", message: "Logout successfully" });
 });
 
-export { storeUser, login, regenerateToken, getUserInfo, handleChangePassword,logout };
+const deleteAcount = expressAsyncHandler(async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  const deletedUser = await deleteUser(user._id);
+  if (!deletedUser) {
+    res
+      .status(400)
+      .json({ status: "Failed", message: "Cannot delete user!" });
+    return;
+  }
+  res.status(200).json({ status: "Success", message: "User deleted successfully" });
+})
+
+const addProfilePicture = expressAsyncHandler(async(req: Request, res: Response)=>{
+  const user = (req as any).user;
+  const image = (req as any).fileName;
+
+  if(!user){
+    res.status(401).json({status: "Failed", message: "Unauthorized!"});
+    return;
+  }
+
+  if(!image){
+    res.status(400).json({status: "Failed", message: "Image not found!"});
+    return;
+  }
+
+  const updatedUser = await updateUser(user._id, {photos: image} as IUser);
+  if(!updatedUser){
+    res.status(400).json({status: "Failed", message: "Cannot update user!"});
+    return;
+  }
+
+  res.status(200).json({status: "Success", message: "Profile picture added successfully"});
+
+})
+
+const updateUserInfo = expressAsyncHandler(async(req: Request, res: Response)=>{
+  const user = (req as any).user;
+  const credentials: IUser = req.body;
+  const updatedUser = await updateUser(user._id, credentials);
+  if(!updatedUser){
+    res.status(400).json({status: "Failed", message: "Cannot update user!"});
+    return;
+  }
+
+  res.status(200).json({status: "Success", message: "User updated successfully"});
+})
+
+export { storeUser, login, regenerateToken, getUserInfo, handleChangePassword,logout, deleteAcount, addProfilePicture, updateUserInfo };

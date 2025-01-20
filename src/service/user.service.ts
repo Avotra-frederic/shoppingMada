@@ -60,9 +60,7 @@ const checkExistingUser = async (credentials: IUser) : Promise <IUser | null> =>
     ]}
     try {
         const user = await User.findOne(filter);
-        if(user)
-            return user;
-        return null
+        return user ? user : null;
     } catch (error) {
         throw error
     }

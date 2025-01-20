@@ -1,12 +1,13 @@
 import { Request, Response } from "express";
 import expressAsyncHandler from "express-async-handler";
 import IBoutiks from "../interface/boutiks.interface";
-import { create_boutiks, delete_boutiks, findBoutiks } from "../service/boutiks.service";
+import { create_boutiks, delete_boutiks, findBoutiks, updateBoutiks} from "../service/boutiks.service";
 import { findUserGroupId } from "../service/user_group.service";
 import { change_user_group } from "../service/user_group_member.service";
 import { Types } from "mongoose";
 
-const storeBoutiksInfo = expressAsyncHandler(
+const 
+storeBoutiksInfo = expressAsyncHandler(
   async (req: Request, res: Response) => {
     const data: IBoutiks = req.body;
     try {
@@ -76,4 +77,43 @@ const getBoutiksInfo = expressAsyncHandler(async(req: Request, res: Response)=>{
   res.status(200).json({status:"Success",boutiks});
 })
 
-export { storeBoutiksInfo , getBoutiksInfo};
+const deleteBoutiks = expressAsyncHandler(async(req: Request, res: Response)=>{
+  const user = (req as any).user;
+  const boutiks = await findBoutiks(user._id);
+
+  if(!user && !boutiks){
+    res.status(401).json({status:"Failed", message:"Unauthorized"});
+    return;
+  }
+
+  await delete_boutiks(boutiks?._id as unknown as string);
+
+  res.status(200).json({status:"Success", message:"Boutiks deleted successfully!"});
+})
+
+const updateBoutiksInfo = expressAsyncHandler(async(req: Request, res: Response)=>{
+    const user = (req as any).user;
+    const boutiks = await findBoutiks(user._id);
+    const data = req.body;
+    const logo = (req as any).fileName;
+
+    if(!user && !boutiks){
+        res.status(401).json({status:"Failed", message:"Unauthorized"});
+        return;
+    }
+    if(logo){
+      const boutiksinfo = {
+        ...data,
+        logo: logo
+      }
+      await updateBoutiks(boutiks?._id as unknown as string, boutiksinfo);
+      res.status(200).json({status:"Success", message:"Boutiks updated successfully!"});
+      return;
+    }
+
+    await updateBoutiks(boutiks?._id as unknown as string, data);
+    res.status(200).json({status:"Success", message:"Boutiks updated successfully!"});
+
+})
+
+export { storeBoutiksInfo , getBoutiksInfo, deleteBoutiks,updateBoutiksInfo};

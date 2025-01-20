@@ -12,7 +12,7 @@ const upload_single_image = expressAsyncHandler(async(req: Request, res: Respons
             res.status(400).json({ status: "Failed", message: "No file uploaded" });
         }
     });
-    // next();
+    
 })
 
 const uploadMultiImage = expressAsyncHandler(async(req: Request, res: Response, next: NextFunction) => {

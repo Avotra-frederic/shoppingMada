@@ -14,12 +14,15 @@ import productRoutes from "../routers/product.routes";
 import csrfProtection from "../middleware/csrf.middleware";
 import mongoSanitize from "express-mongo-sanitize";
 import { default as CSRF } from "csrf";
+import commentRoutes from "../routers/comment.routes";
+import command_routes from "../routers/command.routes";
 const csrf = new CSRF();
 const corsOption: cors.CorsOptions = {
   origin: process.env.ALLOWED_ORIGIN as string,
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   credentials: true,
-  allowedHeaders: ["Content-Type", "Authorization", "xsrf-token"],
+  allowedHeaders: ["Content-Type", "Authorization", "xsrf-token","Origin"],
+  preflightContinue: false,
   
 };
 const app = express();
@@ -31,8 +34,14 @@ app.use(compression());
 app.use(morgan("dev"));
 app.use(cookieParser());
 app.use(mongoSanitize());
+
+app.use("/api/v1/uploads", (req: Request, res: Response, next: NextFunction) => {
+  res.setHeader("Access-Control-Allow-Origin", process.env.ALLOWED_ORIGIN as string);
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  next();
+});
 app.use(
-  "/uploads",
+  "/api/v1/uploads",
   express.static(path.join(__dirname, "../../public/uploads")),
 );
 app.use("/mail", express.static(path.join(__dirname, "../../public/mail")));
@@ -51,6 +60,8 @@ app.get(
     },
   ),
 );
+
+;
 
 app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
   console.log("CSRF ERROR", _req.cookies["xsrf-token"]);
@@ -86,5 +97,9 @@ app.use("/api/v1", otpRoutes);
 app.use("/api/v1", boutiksRoutes);
 
 app.use("/api/v1", productRoutes);
+
+app.use("/api/v1", commentRoutes);
+
+app.use("/api/v1", command_routes);
 
 export default app;
