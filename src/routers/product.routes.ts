@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { addNewVariant, deleteBoutiksProduct, getProduct, removeVariant, storeProduct, updateProductVariant } from "../controller/product.controller";
+import { addNewVariant, deleteBoutiksProduct, getProduct, removeVariant, search_product, storeProduct, updateProductVariant } from "../controller/product.controller";
 import { auth } from "../middleware/auth.middleware";
 import { uploadMultiImage } from "../middleware/upload_single_image.middleware";
 import { product_validator, variant_validator } from "../validator/product.validator";
@@ -13,4 +13,5 @@ productRoutes.post("/product", auth, uploadMultiImage, product_validator, valida
 productRoutes.post("/product/:id/variant",auth,variant_validator, validator, addNewVariant);
 productRoutes.delete("/product/:id/variant/variant_id",auth,removeVariant);
 productRoutes.put("/product/:id/variant/variant_id",auth,updateProductVariant);
+productRoutes.get("/product/search",search_product);
 export default productRoutes;

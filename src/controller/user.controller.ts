@@ -231,6 +231,12 @@ const handleChangePassword = expressAsyncHandler(
 );
 
 const logout = expressAsyncHandler(async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  if(!user)
+  {
+    res.status(401).json({message:"Unautorized!"});
+    return;
+  }
   res.clearCookie("jwt",{httpOnly: true});
   res.clearCookie("refreshToken",{httpOnly: true});
   res.status(200).json({ status: "Success", message: "Logout successfully" });

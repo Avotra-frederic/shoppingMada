@@ -1,5 +1,7 @@
+import { FilterQuery } from "mongoose";
 import IProduct from "../interface/product.interface";
 import Product from "../model/product.model";
+import { access } from "fs";
 
 const create_product = async (product: IProduct): Promise<IProduct | null> => {
   try {
@@ -12,7 +14,7 @@ const create_product = async (product: IProduct): Promise<IProduct | null> => {
 
 const getAllProduct = async (): Promise<IProduct | null> => {
   try {
-    const products = await Product.find({}).lean<IProduct>();
+    const products = await Product.find({}).lean<IProduct>().populate("boutiks_id");
     return products ? products : null;
   } catch (error) {
     throw error;
@@ -34,7 +36,7 @@ const getAllProductInCategory = async (
   slug: string,
 ): Promise<IProduct | null> => {
   try {
-    const products = await Product.find({ category: slug }).lean<IProduct>();
+    const products = await Product.find({ category: slug }).lean<IProduct>().populate("boutiks_id");
     return products ? products : null;
   } catch (error) {
     throw error;
@@ -46,12 +48,18 @@ const addProductVariant = async (
   variant: any,
 ): Promise<IProduct | null> => {
   try {
-    const variants = await Product.findByIdAndUpdate(
-      id,
-      { $push: { variant } },
-      { new: true },
-    ).lean<IProduct>();
-    return variants ? variants : null;
+    const product  = await Product.findById(id);
+    if(!product) return null;
+
+    const existingVariant = product.variant.find((v :any)=> v.name === variant.name);
+    if(existingVariant){
+      existingVariant.values.push(...variant.values);
+    }else{
+      product.variant.push(variant);
+    }
+
+    await product.save()
+    return product.toObject();
   } catch (error) {
     throw error;
   }
@@ -84,7 +92,7 @@ const updateProduct = async (
 
 const getProductById = async (id: string): Promise<IProduct | null> => {
   try {
-    const product = await Product.findById(id).lean<IProduct>();
+    const product = await Product.findById(id).lean<IProduct>().populate("boutiks_id");
     return product ? product : null;
   } catch (error) {
     throw error;
@@ -134,6 +142,18 @@ const deleteVariant = async (
   }
 };
 
+const searchProduct = async(q: string): Promise<IProduct | IProduct[] | null > =>{
+  const product = await Product.find({
+    $or:[
+      {name: {$regex: q, $options:"i"}},
+      {description:{$regex: q, $options:"i"}},
+      {details:{$regex: q, $options:"i"}},
+    ]
+  }).lean<IProduct>().populate("boutiks_id");
+
+  return product ? product : null;
+}
+
 export {
   create_product,
   getAllProduct,
@@ -145,4 +165,5 @@ export {
   deleteVariant,
   getBoutiksProduct,
   addProductVariant,
+  searchProduct
 };

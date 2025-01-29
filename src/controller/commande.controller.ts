@@ -4,6 +4,7 @@ import { get_user_group_name } from "../service/user_group_member.service";
 import { findBoutiks } from "../service/boutiks.service";
 import { addCommande, deleteCommande, getBoutiksCommand, getClientCommand, updateStatus } from "../service/command.service";
 import ICommand from "../interface/command.interface";
+import { getProductById } from "../service/product.service";
 
 const getAllCommand  = expressAsyncHandler(async(req: Request, res: Response)=>{
     const user = (req as any).user;
@@ -45,12 +46,19 @@ const getAllCommand  = expressAsyncHandler(async(req: Request, res: Response)=>{
 const addNewCommande = expressAsyncHandler(async(req: Request, res: Response)=>{
     const user = (req as any).user;
     const data = req.body;
+    console.log(data);
     if(!user){
         res.status(401).json({status:"Failed", message:"Unauthorized!"});
         return;
     }
 
-    const newData = {...data, owner_id: user._id};
+    const product = await getProductById(data.product_id);
+    if(!product){
+        res.status(400).json({status:"Failed", message:"Cannot find product"});
+        return;
+    }
+
+    const newData = {...data, owner_id: user._id,boutiks_id: product.boutiks_id._id};
 
     const newCommande = await addCommande(newData as ICommand);
     if(!newCommande){

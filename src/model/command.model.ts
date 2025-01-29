@@ -18,6 +18,13 @@ const commandeSheme = new Schema<ICommand>({
         type : Schema.Types.ObjectId,
         ref: "Boutiks"
     },
+    variants:{
+        type:Map,
+        of: String
+    },
+    total:{
+        type: Number,
+    },
     status :{
         type: String,
         enum : ["Pending", "Accepted", "Rejected"],

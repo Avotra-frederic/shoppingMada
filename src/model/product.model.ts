@@ -40,13 +40,22 @@ const ProductScheme = new Schema<IProduct>(
           type: String,
           required: true,
         },
-        additionalPrice: {
-          type: Number,
-          default: 0.0,
-        },
-        values: {
-          type: [String],
-        },
+       
+        values: [
+          {
+            value:{
+              type:String,
+            },
+            additionalPrice: {
+              type: Number,
+              default: 0.0,
+            },
+            stock:{
+              type:Number,
+              default:0
+            }
+          }
+        ]
       },
     ],
     photos: {
@@ -56,6 +65,10 @@ const ProductScheme = new Schema<IProduct>(
     owner_id: {
       type: Types.ObjectId,
       ref: "User",
+    },
+    boutiks_id: {
+      type: Types.ObjectId,
+      ref: "Boutiks",
     },
     metadata: {
       type: Schema.Types.Mixed,
