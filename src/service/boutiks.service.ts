@@ -29,7 +29,7 @@ const updateBoutiks= async(id: string, data: IBoutiks): Promise<IBoutiks | null>
 }
 
 const findBoutiks = async(owner_id: string): Promise<IBoutiks | null> =>{
-    const boutiks = await Boutiks.findOne({owner_id: owner_id}).lean<IBoutiks>().exec();
+    const boutiks = await Boutiks.findOne({owner_id: owner_id}).lean<IBoutiks>().populate("subscription_id");
     return boutiks || null;
 }
 export {create_boutiks,delete_boutiks, updateBoutiks, findBoutiks};

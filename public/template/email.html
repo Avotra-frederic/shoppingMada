@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 
 <html
   lang="en"
@@ -9,14 +9,7 @@
     <title></title>
     <meta content="text/html; charset=utf-8" http-equiv="Content-Type" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-    <!--[if mso
-      ]><xml
-        ><o:OfficeDocumentSettings
-          ><o:PixelsPerInch>96</o:PixelsPerInch
-          ><o:AllowPNG /></o:OfficeDocumentSettings></xml
-    ><![endif]-->
-    <!--[if !mso]><!-->
-    <!--<![endif]-->
+
     <style>
       * {
         box-sizing: border-box;
@@ -213,7 +206,7 @@
                                   >
                                     <div style="max-width: 600px">
                                       <img
-                                        alt="Card Header with Border and Shadow Animated"
+                                        alt=""
                                         height="auto"
                                         src="cid:animated"
                                         style="
@@ -222,7 +215,7 @@
                                           border: 0;
                                           width: 100%;
                                         "
-                                        title="Card Header with Border and Shadow Animated"
+                                        title=""
                                         width="600"
                                       />
                                     </div>
@@ -249,7 +242,7 @@
                 mso-table-lspace: 0pt;
                 mso-table-rspace: 0pt;
                 background-color: #d9dffa;
-                background-image: url('cid:background');
+                background-image: url(&quot;cid:background&quot;);
                 background-position: top center;
                 background-repeat: repeat;
               "
@@ -312,18 +305,19 @@
                                 <td class="pad">
                                   <div
                                     style="
-                                      color: #506bec;
-                                      font-family: Helvetica Neue, Helvetica,
-                                        Arial, sans-serif;
+                                      color: #01b150;
+                                      font-family:
+                                        Helvetica Neue,
+                                        Helvetica,
+                                        Arial,
+                                        sans-serif;
                                       font-size: 38px;
                                       line-height: 120%;
                                       text-align: left;
                                       mso-line-height-alt: 45.6px;
                                     "
                                   >
-                                    <p style="margin: 0">
-                                      Vérification de l'adresse mail
-                                    </p>
+                                    <p style="margin: 0">{{title}}</p>
                                   </div>
                                 </td>
                               </tr>
@@ -346,21 +340,18 @@
                                   <div
                                     style="
                                       color: #40507a;
-                                      font-family: Helvetica Neue, Helvetica,
-                                        Arial, sans-serif;
+                                      font-family:
+                                        Helvetica Neue,
+                                        Helvetica,
+                                        Arial,
+                                        sans-serif;
                                       font-size: 16px;
                                       line-height: 120%;
                                       text-align: left;
                                       mso-line-height-alt: 19.2px;
                                     "
                                   >
-                                    <p style="margin: 0">
-                                      Merci de vous être inscrit(e) chez
-                                      <strong>ShoppingMada</strong> ! Afin de
-                                      compléter la vérification de votre adresse
-                                      email, veuillez utiliser le code de
-                                      vérification unique ci-dessous :
-                                    </p>
+                                    <p style="margin: 0">{{message}}</p>
                                   </div>
                                 </td>
                               </tr>
@@ -383,8 +374,11 @@
                                   <div
                                     style="
                                       color: #40507a;
-                                      font-family: Helvetica Neue, Helvetica,
-                                        Arial, sans-serif;
+                                      font-family:
+                                        Helvetica Neue,
+                                        Helvetica,
+                                        Arial,
+                                        sans-serif;
                                       font-size: 16px;
                                       line-height: 120%;
                                       text-align: left;
@@ -394,7 +388,7 @@
                                     <p
                                       style="margin: 0; word-break: break-word"
                                     >
-                                      <strong>Code OTP :</strong>
+                                      {{information}}
                                       <code>{{CODE_OTP}}</code> 
                                     </p>
                                   </div>
@@ -419,8 +413,11 @@
                                   <div
                                     style="
                                       color: #40507a;
-                                      font-family: Helvetica Neue, Helvetica,
-                                        Arial, sans-serif;
+                                      font-family:
+                                        Helvetica Neue,
+                                        Helvetica,
+                                        Arial,
+                                        sans-serif;
                                       font-size: 14px;
                                       line-height: 120%;
                                       text-align: left;
@@ -430,8 +427,7 @@
                                     <p
                                       style="margin: 0; word-break: break-word"
                                     >
-                                      Ce code de vérification expirera dans
-                                      <strong>10 minutes</strong>.
+                                      {{content}}
                                     </p>
                                   </div>
                                 </td>
@@ -455,8 +451,11 @@
                                   <div
                                     style="
                                       color: #40507a;
-                                      font-family: Helvetica Neue, Helvetica,
-                                        Arial, sans-serif;
+                                      font-family:
+                                        Helvetica Neue,
+                                        Helvetica,
+                                        Arial,
+                                        sans-serif;
                                       font-size: 14px;
                                       line-height: 120%;
                                       text-align: left;
@@ -466,10 +465,7 @@
                                     <p
                                       style="margin: 0; word-break: break-word"
                                     >
-                                      Si vous n'avez pas demandé cette
-                                      vérification, veuillez ignorer cet email.
-                                      Pour des raisons de sécurité, ne partagez
-                                      jamais ce code avec qui que ce soit.
+                                      {{other}}
                                     </p>
                                   </div>
                                 </td>
@@ -623,12 +619,12 @@
                                   >
                                     <div style="max-width: 145px">
                                       <a
-                                        href="http://www.example.com/"
+                                        href="https://shoppingmada.mg"
                                         style="outline: none"
                                         tabindex="-1"
                                         target="_blank"
                                         ><img
-                                          alt="Your Logo"
+                                          alt="shoppingmada Logo"
                                           height="auto"
                                           src="cid:logo"
                                           style="
@@ -663,19 +659,23 @@
                                   <div
                                     style="
                                       color: #97a2da;
-                                      font-family: Helvetica Neue, Helvetica,
-                                        Arial, sans-serif;
+                                      font-family:
+                                        Helvetica Neue,
+                                        Helvetica,
+                                        Arial,
+                                        sans-serif;
                                       font-size: 14px;
                                       line-height: 120%;
                                       text-align: center;
                                       mso-line-height-alt: 16.8px;
                                     "
                                   >
-                                    <p
+                                    <a 
+                                      href="tel:+261345385365"
                                       style="margin: 0; word-break: break-word"
                                     >
-                                      +(123) 456–7890
-                                    </p>
+                                      +261 34 53 853 65
+                                    </a>
                                   </div>
                                 </td>
                               </tr>
@@ -698,8 +698,11 @@
                                   <div
                                     style="
                                       color: #97a2da;
-                                      font-family: Helvetica Neue, Helvetica,
-                                        Arial, sans-serif;
+                                      font-family:
+                                        Helvetica Neue,
+                                        Helvetica,
+                                        Arial,
+                                        sans-serif;
                                       font-size: 14px;
                                       line-height: 120%;
                                       text-align: center;
@@ -709,9 +712,7 @@
                                     <p
                                       style="margin: 0; word-break: break-word"
                                     >
-                                      This link will expire in the next 24
-                                      hours.<br />Please feel free to contact us
-                                      at email@yourbrand.com.
+                                      Merci de votre confiance!
                                     </p>
                                   </div>
                                 </td>
@@ -735,8 +736,11 @@
                                   <div
                                     style="
                                       color: #97a2da;
-                                      font-family: Helvetica Neue, Helvetica,
-                                        Arial, sans-serif;
+                                      font-family:
+                                        Helvetica Neue,
+                                        Helvetica,
+                                        Arial,
+                                        sans-serif;
                                       font-size: 12px;
                                       line-height: 120%;
                                       text-align: center;
@@ -747,7 +751,7 @@
                                       style="margin: 0; word-break: break-word"
                                     >
                                       <span style="word-break: break-word"
-                                        >Copyright© 2024 Fullcoding.</span
+                                        >Copyright© 2024 ShoppingMada.</span
                                       >
                                     </p>
                                     <p
@@ -766,16 +770,6 @@
                                           >Unsubscribe</a
                                         >
                                         | <a
-                                          href="http://www.example.com/"
-                                          rel="noopener"
-                                          style="
-                                            text-decoration: underline;
-                                            color: #97a2da;
-                                          "
-                                          target="_blank"
-                                          title="Manage your preferences"
-                                          >Manage your preferences</a
-                                        > | <a
                                           href="http://www.example.com/"
                                           rel="noopener"
                                           style="
@@ -873,7 +867,7 @@
                                   style="
                                     vertical-align: middle;
                                     color: #1e0e4b;
-                                    font-family: 'Inter', sans-serif;
+                                    font-family: &quot;Inter&quot;, sans-serif;
                                     font-size: 15px;
                                     padding-bottom: 5px;
                                     padding-top: 5px;
@@ -907,28 +901,12 @@
                                           padding-right: 6px;
                                         "
                                       >
-                                        <a
-                                          href="http://designedwithbeefree.com/"
-                                          style="text-decoration: none"
-                                          target="_blank"
-                                          ><img
-                                            align="center"
-                                            alt="Beefree Logo"
-                                            class="icon"
-                                            height="auto"
-                                            src="cid:Beefree"
-                                            style="
-                                              display: block;
-                                              height: auto;
-                                              margin: 0 auto;
-                                              border: 0;
-                                            "
-                                            width="34"
-                                        /></a>
+                                        
                                       </td>
                                       <td
                                         style="
-                                          font-family: 'Inter', sans-serif;
+                                          font-family: &quot;Inter&quot;,
+                                            sans-serif;
                                           font-size: 15px;
                                           font-weight: undefined;
                                           color: #1e0e4b;
@@ -939,7 +917,7 @@
                                         "
                                       >
                                         <a
-                                          href="http://designedwithbeefree.com/"
+                                          href="https://fullconding.vercel.app/"
                                           style="
                                             color: #1e0e4b;
                                             text-decoration: none;

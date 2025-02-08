@@ -22,7 +22,7 @@ const deleteComment = async(id: string): Promise<IComment | null> =>{
 const getProductComment = async(product_id: string): Promise<IComment | null> =>{
     try {
         const comment  = await Comment.find({product_id: product_id}).lean<IComment>().populate("owner_id");
-        return comment
+        return comment ? comment : null
     } catch (error) {
         throw error
     }

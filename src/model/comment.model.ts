@@ -15,6 +15,10 @@ const commentScheme = new Schema({
         type:Schema.Types.ObjectId,
         ref: "Product",
         require:true
+    },
+    date:{
+        type:Date,
+        default: new Date()
     }
 },{timestamps: true})
 

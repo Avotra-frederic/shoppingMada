@@ -27,10 +27,10 @@ const commandeSheme = new Schema<ICommand>({
     },
     status :{
         type: String,
-        enum : ["Pending", "Accepted", "Rejected"],
+        enum : ["Pending", "Accepted", "Rejected","Canceled"],
         default : "Pending"
     }
-})
+},{timestamps: true})
 
 const Command = models.Command || model<ICommand>("Command", commandeSheme);
 export default Command;

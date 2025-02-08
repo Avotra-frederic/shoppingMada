@@ -4,6 +4,7 @@ import {
   checkExistingUser,
   createUser,
   deleteUser,
+  getAllUser,
   getUser,
   getUserWithCredentials,
   updateUser,
@@ -16,71 +17,49 @@ import IUserGroupMember from "../interface/user_group_member.interface";
 import { Types } from "mongoose";
 import {
   add_user_in_user_group,
+  delete_user_in_user_group,
   get_user_group_name,
 } from "../service/user_group_member.service";
 import { getOTP } from "../helpers/OTP.algo";
 import sendEmail from "../helpers/mail";
 
-
-const storeUser = expressAsyncHandler(
-  async (req: Request, res: Response) => {
-    const credentials: IUser = req.body;
-    const existingUser = await checkExistingUser(credentials);
-    if (existingUser) {
-      res.status(401).json({
-        status: "Failed",
-        message:
-          "Couldn't to create user! email or phonenumber is already taken!",
-      });
-      return;
-    }
-    const hashPassword = bcrypt.hashSync(credentials.password, 10);
-    Object.assign(credentials, { password: hashPassword });
-    const user = await createUser(credentials);
-    if (!user) {
-      res.status(401).json({
-        status: "Failed",
-        message: "Couldn't to create user! please try again",
-      });
-      return;
-    }
-    let addUserIntoUserGroup;
-    const userGroupName = await findUserGroupId("Client");
-    if (userGroupName) {
-      addUserIntoUserGroup = {
-        usergroup_id: userGroupName?._id as Types.ObjectId,
-        user_id: user._id as Types.ObjectId,
-      };
-    }
-    await add_user_in_user_group(addUserIntoUserGroup as IUserGroupMember);
-
-    const { password, ...authUser } = credentials;
-    const userGroup = "Client";
-    const tokenPayload = { ...authUser, _id: user._id };
-    const token = jwt.sign(tokenPayload, process.env.TOKEN_SECRET as string, {
-      expiresIn: "1h",
+const storeUser = expressAsyncHandler(async (req: Request, res: Response) => {
+  const credentials: IUser = req.body;
+  const existingUser = await checkExistingUser(credentials);
+  if (existingUser) {
+    res.status(401).json({
+      status: "Failed",
+      message:
+        "Couldn't to create user! email or phonenumber is already taken!",
     });
-
-    res.cookie("jwt", token, {
-      httpOnly: true,
+    return;
+  }
+  const hashPassword = bcrypt.hashSync(credentials.password, 10);
+  Object.assign(credentials, { password: hashPassword });
+  const user = await createUser(credentials);
+  if (!user) {
+    res.status(401).json({
+      status: "Failed",
+      message: "Couldn't to create user! please try again",
     });
-
-    const OTPCode: string = getOTP(user.email);
-
-    const data = {
-      CODE_OTP: OTPCode,
+    return;
+  }
+  let addUserIntoUserGroup;
+  const userGroupName = await findUserGroupId("Client");
+  if (userGroupName) {
+    addUserIntoUserGroup = {
+      usergroup_id: userGroupName?._id as Types.ObjectId,
+      user_id: user._id as Types.ObjectId,
     };
-
-    await sendEmail(data, credentials.email);
-    const updatedUser = { ...authUser, userGroup };
-    res.status(201).json({
-      status: "Success",
-      message: "User created successfully!",
-      userInfo: updatedUser,
-    });
-  },
-);
-
+  }
+  const usermember : IUserGroupMember = await add_user_in_user_group(addUserIntoUserGroup as IUserGroupMember) as IUserGroupMember;
+  await updateUser(user._id as string,{userGroupMember_id:usermember._id} as IUser);
+  
+  res.status(201).json({
+    status: "Success",
+    message: "User created successfully!",
+  });
+});
 
 const login = expressAsyncHandler(async (req: Request, res: Response) => {
   const { emailOrPhone, password } = req.body;
@@ -93,7 +72,7 @@ const login = expressAsyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
-  const authUser = Object.keys(user).reduce((acc: any, userKey) => {
+  const authUser: IUser = Object.keys(user).reduce((acc: any, userKey) => {
     if (userKey != "password")
       acc[userKey as keyof IUser] = user[userKey as keyof IUser];
     return acc;
@@ -107,20 +86,39 @@ const login = expressAsyncHandler(async (req: Request, res: Response) => {
     httpOnly: true,
   });
 
-  const userGroup = await get_user_group_name({ user_id: authUser._id });
-  if (!userGroup) {
-    res
-      .status(401)
-      .json({ status: "Failed", message: "Cannot find group for user!" });
+
+  if(!authUser.userGroupMember_id){
+    res.status(403).json({message:"Votre compte est désactivé!",userInfo: authUser})
     return;
   }
 
-  const updatedUser = { ...authUser, userGroup};
+
+  if (!user.emailVerifyAt) {
+    const OTPCode: string = getOTP(user.email);
+
+    const data = {
+      title: "Vérification de l'adresse mail!",
+      information:"Code de validation: ",
+      CODE_OTP: OTPCode,
+      message:"Merci d'avoir inscri(e) chez ShoppingMada! Afin de pourvoir se connecté, veuillez confirmé votre adresse en utilisant le code ci-desous",
+      content:"Cette code ne dure que pendant 10 min àpres la récéption de cette message"
+    };
+
+    await sendEmail(data, user.email,"Verification de l'adresse mail");
+    res
+      .status(401)
+      .json({
+        status: "Verification Failed",
+        message: "Veuillez verifier votre adresse Email",
+        userInfo: authUser,
+      });
+    return;
+  }
 
   res.status(201).json({
     status: "Success",
     message: "login successfully",
-    userInfo: updatedUser,
+    userInfo: authUser,
   });
 });
 
@@ -143,24 +141,12 @@ const regenerateToken = expressAsyncHandler(
 
     res.cookie("jwt", token, {
       httpOnly: true,
-    })
-
-    const userGroup = await get_user_group_name({
-      user_id: authUser._id as Types.ObjectId,
     });
-    if (!userGroup) {
-      res
-        .status(401)
-        .json({ status: "Failed", message: "Cannot find group for user!" });
-      return;
-    }
-
-    const updatedUserInfo = { ...authUser, userGroup };
 
     res.status(201).json({
       status: "Success",
       message: "token regenerate successfully",
-      userInfo: updatedUserInfo,
+      userInfo: authUser,
     });
   },
 );
@@ -198,10 +184,14 @@ const handleChangePassword = expressAsyncHandler(
     }
     const OTPCode: string = getOTP(user.email);
     const data = {
+      title: "Vérification de l'adresse mail!",
+      information:"Code de validation: ",
       CODE_OTP: OTPCode,
+      message:"Merci d'avoir inscri(e) chez ShoppingMada! Afin de pourvoir se connecté, veuillez confirmé votre adresse en utilisant le code ci-desous",
+      content:"Cette code ne dure que pendant 10 min àpres la récéption de cette message"
     };
 
-    await sendEmail(data, credentials.email);
+    await sendEmail(data, credentials.email,"Verification de l'adresse mail");
 
     const { password, ...authUser } = user;
 
@@ -211,83 +201,228 @@ const handleChangePassword = expressAsyncHandler(
 
     res.cookie("jwt", token, {
       httpOnly: true,
-    })
-    const userGroup = await get_user_group_name({ user_id: authUser._id as Types.ObjectId });
-    if (!userGroup) {
-      res
-        .status(401)
-        .json({ status: "Failed", message: "Cannot find group for user!" });
-      return;
-    }
-
-    const updatedUser = { ...authUser, userGroup, };
+    });
 
     res.status(201).json({
       status: "Success",
       message: "login successfully",
-      userInfo: updatedUser,
+      userInfo: authUser,
     });
   },
 );
 
 const logout = expressAsyncHandler(async (req: Request, res: Response) => {
   const user = (req as any).user;
-  if(!user)
-  {
-    res.status(401).json({message:"Unautorized!"});
+  if (!user) {
+    res.status(401).json({ message: "Unautorized!" });
     return;
   }
-  res.clearCookie("jwt",{httpOnly: true});
-  res.clearCookie("refreshToken",{httpOnly: true});
+  res.clearCookie("jwt", { httpOnly: true });
+  res.clearCookie("refreshToken", { httpOnly: true });
   res.status(200).json({ status: "Success", message: "Logout successfully" });
 });
 
-const deleteAcount = expressAsyncHandler(async (req: Request, res: Response) => {
-  const user = (req as any).user;
-  const deletedUser = await deleteUser(user._id);
-  if (!deletedUser) {
+const deleteAcount = expressAsyncHandler(
+  async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    const deletedUser = await deleteUser(user._id);
+    if (!deletedUser) {
+      res
+        .status(400)
+        .json({ status: "Failed", message: "Cannot delete user!" });
+      return;
+    }
     res
-      .status(400)
-      .json({ status: "Failed", message: "Cannot delete user!" });
+      .status(200)
+      .json({ status: "Success", message: "User deleted successfully" });
+  },
+);
+
+const addProfilePicture = expressAsyncHandler(
+  async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    const image = (req as any).fileName;
+
+    if (!user) {
+      res.status(401).json({ status: "Failed", message: "Unauthorized!" });
+      return;
+    }
+
+    if (!image) {
+      res.status(400).json({ status: "Failed", message: "Image not found!" });
+      return;
+    }
+
+    const updatedUser = await updateUser(user._id, { photos: image } as IUser);
+    if (!updatedUser) {
+      res
+        .status(400)
+        .json({ status: "Failed", message: "Cannot update user!" });
+      return;
+    }
+
+    res
+      .status(200)
+      .json({
+        status: "Success",
+        message: "Profile picture added successfully",
+      });
+  },
+);
+
+const updateUserInfo = expressAsyncHandler(
+  async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    const credentials: IUser = req.body;
+    if(credentials.password){
+      const hashPassword = bcrypt.hashSync(credentials.password, 10);
+      Object.assign(credentials, { password: hashPassword });
+    }
+    const updatedUser = await updateUser(user._id, credentials);
+    if (!updatedUser) {
+      res
+        .status(400)
+        .json({ status: "Failed", message: "Cannot update user!" });
+      return;
+    }
+
+    res
+      .status(200)
+      .json({ status: "Success", message: "User updated successfully" });
+  },
+);
+const all = expressAsyncHandler(async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  const users = await getAllUser();
+  if (!users) {
+    res.status(400).json({ status: "Failed", message: "Cannot update user!" });
     return;
   }
-  res.status(200).json({ status: "Success", message: "User deleted successfully" });
-})
 
-const addProfilePicture = expressAsyncHandler(async(req: Request, res: Response)=>{
+  res.status(200).json({ status: "Success", data: users });
+});
+
+const findUser = expressAsyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const user = await getUser(id);
+  if (!user) {
+    res.status(400).json({ status: "Failed", message: "Cannot find user" });
+    return;
+  }
+  res.status(200).json({ status: "Success", data: user });
+});
+
+const blockAccount = expressAsyncHandler(
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const user = await delete_user_in_user_group({
+      user_id: new Types.ObjectId(id),
+    });
+    if (!user) {
+      res
+        .status(400)
+        .json({ status: "Failed", message: "Cannot find user in user group" });
+      return;
+    }
+    res
+      .status(201)
+      .json({
+        status: "Success",
+        message: "User account Blocked successfully!",
+      });
+  },
+);
+
+const activeAccount = expressAsyncHandler(
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    const user = await getUser(id);
+    if (!user) {
+      res.status(400).json({ status: "Failed", message: "Cannot find user!" });
+      return;
+    }
+
+    if (user.boutiks_id) {
+      const userGroup = await findUserGroupId("Boutiks");
+      if (userGroup) {
+        const addUserIntoUserGroup = {
+          usergroup_id: userGroup?._id as Types.ObjectId,
+          user_id: user._id as Types.ObjectId,
+        };
+        await add_user_in_user_group(addUserIntoUserGroup as IUserGroupMember);
+        res
+          .status(201)
+          .json({ status: "Success", message: "User account actived!" });
+        return;
+      }
+    } else {
+      const userGroup = await findUserGroupId("Client");
+      if (userGroup) {
+        const addUserIntoUserGroup = {
+          usergroup_id: userGroup?._id as Types.ObjectId,
+          user_id: user._id as Types.ObjectId,
+        };
+        await add_user_in_user_group(addUserIntoUserGroup as IUserGroupMember);
+        res
+          .status(201)
+          .json({ status: "Success", message: "User account actived!" });
+        return;
+      }
+      res.status(400).json({ status: "Failed", message: "Failed" });
+    }
+  },
+);
+
+const checkUserAccount = expressAsyncHandler(
+  async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const userGroup = await get_user_group_name({
+      user_id: new Types.ObjectId(id),
+    });
+    if (!userGroup) {
+      res.status(400).json({ status: "Failed", message: "Account blocked" });
+      return;
+    }
+    res.status(200).json({ status: "Success", message: "Account actived!" });
+  },
+);
+
+const changeUserGroupToAdmin = expressAsyncHandler(async(req:Request, res:Response)=>{
   const user = (req as any).user;
-  const image = (req as any).fileName;
+  const {id} = req.params
 
   if(!user){
-    res.status(401).json({status: "Failed", message: "Unauthorized!"});
+    res.status(401).json({status:"Failed",message:"Vous devez vous connécté tout d'abord"})
     return;
   }
 
-  if(!image){
-    res.status(400).json({status: "Failed", message: "Image not found!"});
+  const userGroup = await findUserGroupId("Super Admin");
+  const newUserGroup = await add_user_in_user_group({user_id:new Types.ObjectId(id), usergroup_id: userGroup?._id as Types.ObjectId} as IUserGroupMember)
+  if(!newUserGroup){
+    res.status(403).json({status:"Failed", message:"Une erreur est survenu!"})
     return;
   }
 
-  const updatedUser = await updateUser(user._id, {photos: image} as IUser);
-  if(!updatedUser){
-    res.status(400).json({status: "Failed", message: "Cannot update user!"});
-    return;
-  }
+  await updateUser(id,{userGroupMember_id:newUserGroup._id} as IUser)
 
-  res.status(200).json({status: "Success", message: "Profile picture added successfully"});
-
+  res.status(201).json({status:"Success",message:"Modification éffétué avec succès"});
 })
 
-const updateUserInfo = expressAsyncHandler(async(req: Request, res: Response)=>{
-  const user = (req as any).user;
-  const credentials: IUser = req.body;
-  const updatedUser = await updateUser(user._id, credentials);
-  if(!updatedUser){
-    res.status(400).json({status: "Failed", message: "Cannot update user!"});
-    return;
-  }
-
-  res.status(200).json({status: "Success", message: "User updated successfully"});
-})
-
-export { storeUser, login, regenerateToken, getUserInfo, handleChangePassword,logout, deleteAcount, addProfilePicture, updateUserInfo };
+export {
+  all,
+  storeUser,
+  checkUserAccount,
+  login,
+  blockAccount,
+  activeAccount,
+  findUser,
+  regenerateToken,
+  getUserInfo,
+  handleChangePassword,
+  logout,
+  deleteAcount,
+  addProfilePicture,
+  updateUserInfo,
+  changeUserGroupToAdmin
+};

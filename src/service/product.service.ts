@@ -126,15 +126,21 @@ const updateVariant = async (
 const deleteVariant = async (
   id: string,
   variant_id: string,
+  valueName: string
 ): Promise<IProduct | null> => {
   try {
-    const updatedProduct = await Product.findByIdAndUpdate(
-      id,
-      {
-        $pull: { variant: { _id: variant_id } },
-      },
-      { new: true },
-    );
+    const updatedProduct = await Product.findOneAndUpdate(
+      {_id:id, "variant._id":variant_id},
+      {$pull:{"variant.$.values":{value:valueName}}}
+    ).lean<IProduct>();
+
+    if(updatedProduct?.variant){
+      const variant =  updatedProduct.variant.find((v:any)=>v._id.toString() === variant_id)
+      if(variant && variant.values?.length === 0){
+        await Product.findByIdAndUpdate(id,{$pull:{variant:{_id: variant_id}}})
+      }
+    }
+    
 
     return updatedProduct ? updatedProduct : null;
   } catch (error) {
@@ -142,16 +148,20 @@ const deleteVariant = async (
   }
 };
 
-const searchProduct = async(q: string): Promise<IProduct | IProduct[] | null > =>{
-  const product = await Product.find({
+const searchProduct = async(q: string, location?:string): Promise<IProduct | IProduct[] | [] > =>{
+  let product = await Product.find({
     $or:[
       {name: {$regex: q, $options:"i"}},
       {description:{$regex: q, $options:"i"}},
       {details:{$regex: q, $options:"i"}},
     ]
-  }).lean<IProduct>().populate("boutiks_id");
+  }).lean<IProduct[]>().populate("boutiks_id");
 
-  return product ? product : null;
+
+  if(location){
+    product = product.filter(pr => pr.boutiks_id && pr.boutiks_id.ville && new RegExp(location,"i").test(pr.boutiks_id.ville))
+  }
+  return product.length > 0? product : [];
 }
 
 export {

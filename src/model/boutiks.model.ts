@@ -20,6 +20,9 @@ const BoutiksSheme = new Schema({
     logo:{
         type: String,
     },
+    ville:{
+        type:String
+    },
     issuer: {
         type:String
     },
@@ -36,6 +39,10 @@ const BoutiksSheme = new Schema({
         required: true,
         enum: ["free", "pro"],
         default: "free"
+    },
+    subscription_id:{
+        type:Schema.Types.ObjectId,
+        ref:"Subscription"
     }
 },{
     timestamps: true,

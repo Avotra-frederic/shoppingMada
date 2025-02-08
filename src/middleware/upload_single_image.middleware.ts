@@ -9,7 +9,7 @@ const upload_single_image = expressAsyncHandler(async(req: Request, res: Respons
             (req as any).fileName = (req as any).file.filename;
             next()
         } else {
-            res.status(400).json({ status: "Failed", message: "No file uploaded" });
+            next();
         }
     });
     

@@ -1,3 +1,4 @@
+import { Mongoose } from "mongoose";
 import ICommand from "../interface/command.interface";
 import Command from "../model/command.model";
 
@@ -30,7 +31,7 @@ const getClientCommand = async(id: string): Promise<ICommand | null> => {
 
 const updateStatus =  async(id: string, newStatus: string)=>{
     try {
-        const commande =  await Command.findByIdAndUpdate(id,{status:newStatus},{new:true}).lean<ICommand>().populate("product_id").populate("owner_id");
+        const commande =  await Command.findByIdAndUpdate(id,{status:newStatus},{new:true}).lean<ICommand>().populate({path:"product_id", populate:{path:"boutiks_id"}}).populate("owner_id");
         return commande ? commande : null;
     } catch (error) {
         throw error;
@@ -46,4 +47,18 @@ const deleteCommande = async(id: string)=>{
     }
 }
 
-export {addCommande, getBoutiksCommand, updateStatus, getClientCommand,deleteCommande}
+const deleteProductCommand = async(id:string)=>{
+    const command = await Command.deleteMany({product_id:id});
+    return command ? command : null
+}
+
+
+const getCommandeById = async(id:string): Promise<ICommand | null> =>{
+    try {
+        const command = await Command.findById(id).lean<ICommand>().populate("owner_id").populate("product_id");
+        return command ? command : null
+    } catch (error) {
+        throw error;
+    }
+}
+export {addCommande, deleteProductCommand, getBoutiksCommand, updateStatus, getClientCommand,deleteCommande, getCommandeById}

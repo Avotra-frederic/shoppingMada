@@ -16,6 +16,8 @@ import mongoSanitize from "express-mongo-sanitize";
 import { default as CSRF } from "csrf";
 import commentRoutes from "../routers/comment.routes";
 import command_routes from "../routers/command.routes";
+import userRouter from "../routers/user.routes";
+import subscriptionRoute from "../routers/subscription.routes";
 const csrf = new CSRF();
 const corsOption: cors.CorsOptions = {
   origin: process.env.ALLOWED_ORIGIN as string,
@@ -79,16 +81,21 @@ app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
 
 app.use(csrfProtection);
 
-app.get("/api/v1/csrf-token", (req: Request, res: Response) => {
-  const newSecret = csrf.secretSync();
-  const csrfToken = csrf.create(newSecret);
-  res.cookie("csrf-secret", newSecret, {
-    httpOnly: true,
-  });
+app.get("/api/v1/csrf-token", expressAsyncHandler(async(req: Request, res: Response) => {
+  let secret = req.cookies["csrf-secret"];
+  if(!secret){
+    secret = csrf.secretSync();
+    res.cookie("csrf-secret", secret, {
+      httpOnly: true,
+    });
+  }
+  
+  const csrfToken = csrf.create(secret);
   res.json({ csrfToken });
-});
+}));
 //load routes
 app.use("/api/v1", authRoutes);
+app.use("/api/v1", userRouter);
 
 app.use("/api/v1", personnal_info_routes);
 
@@ -101,5 +108,6 @@ app.use("/api/v1", productRoutes);
 app.use("/api/v1", commentRoutes);
 
 app.use("/api/v1", command_routes);
+app.use("/api/v1", subscriptionRoute);
 
 export default app;

@@ -11,5 +11,7 @@ export default interface IBoutiks extends Document
     product_category?: [Types.ObjectId | string];
     adresse:String;
     issuer?:string;
-    plan:string
+    plan:string;
+    ville:string;
+    subscription_id:Types.ObjectId
 }

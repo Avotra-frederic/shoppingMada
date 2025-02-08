@@ -1,4 +1,4 @@
-import { model, models, Schema } from "mongoose";
+import { model, models, Schema, Types } from "mongoose";
 import IUser from "../interface/user.interface";
 
 const userScheme = new Schema<IUser>({
@@ -27,6 +27,18 @@ const userScheme = new Schema<IUser>({
     },
     photos:{
         type: String
+    },
+    boutiks_id:{
+        type:Schema.Types.ObjectId,
+        ref:'Boutiks'
+    },
+    personnalInfo_id:{
+        type:Schema.Types.ObjectId,
+        ref:"PersonnalInfo"
+    },
+    userGroupMember_id:{
+        type:Schema.Types.ObjectId,
+        ref : "UserGroupMember"
     }
 },{
     timestamps: true

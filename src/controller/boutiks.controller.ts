@@ -5,6 +5,9 @@ import { create_boutiks, delete_boutiks, findBoutiks, updateBoutiks} from "../se
 import { findUserGroupId } from "../service/user_group.service";
 import { change_user_group } from "../service/user_group_member.service";
 import { Types } from "mongoose";
+import { updateUser } from "../service/user.service";
+import IUser from "../interface/user.interface";
+
 
 const 
 storeBoutiksInfo = expressAsyncHandler(
@@ -28,6 +31,13 @@ storeBoutiksInfo = expressAsyncHandler(
           });
         return;
       }
+
+      const updated_user = await updateUser((req as any)._id,{boutiks_id:createBoutiks._id} as IUser); 
+      if(!updated_user)
+      {
+        res.status(500).json({message:"Cannot update user info please try again later!"});
+        return;
+      }
       const userGroup = await findUserGroupId("Boutiks");
       if (!userGroup) {
         res
@@ -38,11 +48,11 @@ storeBoutiksInfo = expressAsyncHandler(
           });
         return;
       }
-      const updateUser = await change_user_group({
+      const updateUsers = await change_user_group({
         user_id: (req as any).user._id,
         newusergroup_id: userGroup?._id as Types.ObjectId,
       });
-      if (!updateUser) {
+      if (!updateUsers) {
         await delete_boutiks(createBoutiks?._id as unknown as string);
         res
           .status(402)

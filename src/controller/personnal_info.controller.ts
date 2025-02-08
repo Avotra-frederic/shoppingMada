@@ -2,6 +2,9 @@ import { NextFunction, Request, Response } from "express";
 import expressAsyncHandler from "express-async-handler";
 import IPersonalInfo from "../interface/personnal_info.interface";
 import { completPersonnalInfo, create_personnal_info, get_personnal_info_by_owner_id } from "../service/personnel_info.service";
+import { updateUser } from "../service/user.service";
+import { ObjectId, Schema, Types } from "mongoose";
+import IUser from "../interface/user.interface";
 
 const store_personnal_info= expressAsyncHandler(async(req: Request, res: Response, next: NextFunction)=>{
    
@@ -12,6 +15,12 @@ const store_personnal_info= expressAsyncHandler(async(req: Request, res: Respons
         if(!personnalInfo){
             res.status(401).json({status: "Failed", message:"Couldn't to add personnal info!"});
             return;
+        }
+        const newUser = await updateUser((req as any).user._id,{personnalInfo_id: new Types.ObjectId(personnalInfo._id as string)} as IUser);
+        if(!newUser)
+        {
+            res.status(400).json({message:"Cannot update users info please try again later"});
+            return
         }
         res.status(201).json({status:"Success", message:"Personnal info saved successfully"});
     } catch (error) {

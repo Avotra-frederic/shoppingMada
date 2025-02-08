@@ -8,8 +8,9 @@ interface IOTP{
 }
 const verifyOTPCode = expressAsyncHandler(async(req: Request, res:Response)=>{
     const {OTP}: IOTP = req.body;
+    console.log((req as any).user.email);
     if(OTP.trim() !== getOTP((req as any).user.email)){
-        res.status(401).json({status:"Failed", message:"Invalid OTP code"});
+        res.status(403).json({status:"Failed", message:"Invalid OTP code"});
         return;
     }
     console.log("id users",(req as any).user._id);

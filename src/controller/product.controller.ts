@@ -17,37 +17,48 @@ import {
 import path from "path";
 import fs from "fs";
 import { findBoutiks } from "../service/boutiks.service";
-import Product from "../model/product.model";
+import { deleteProductCommand } from "../service/command.service";
 
 const storeProduct = expressAsyncHandler(
   async (req: Request, res: Response) => {
-    const data: IProduct = req.body;
+    const data = req.body;
     const fileNames = (req as any).fileNames;
-    const boutiks =  await findBoutiks((req as any).user._id);
+    const boutiks = await findBoutiks((req as any).user._id);
     if (req.method === "POST") {
       const newData = {
         ...data,
         owner_id: (req as any).user._id,
         photos: fileNames,
-        boutiks_id: boutiks?._id
+        boutiks_id: boutiks?._id,
       };
       const product = await create_product(newData as IProduct);
+      if (!product) {
+        res.status(400).json({
+          status: "Failed",
+          message: "Failed to save product! Please try again",
+        });
+        return;
+      }
+    }
+
+    if (req.method === "PUT") {
+      const { id } = req.params;
+      const { boutiks_id, variant, photos, ...extractData } = data;
+      var newData = null;
+      if (Array.from(fileNames).length > 0) {
+        newData = { ...extractData, photos: fileNames };
+      } else {
+        const { photos, image, ...updateInfo } = extractData;
+        newData = { ...updateInfo, photos: image };
+      }
+      const product = await updateProduct(id, newData as IProduct);
       if (!product) {
         res
           .status(400)
           .json({
             status: "Failed",
-            message: "Failed to save product! Please try again",
+            message: "Failed to update product! Please try again",
           });
-        return;
-      }
-    }
-
-    if(req.method ==="PUT"){
-      const {id} = req.params;
-      const product = await updateProduct(id, data);
-      if(!product){
-        res.status(400).json({status:"Failed", message:"Failed to update product! Please try again"});
         return;
       }
     }
@@ -62,7 +73,7 @@ const getProduct = expressAsyncHandler(async (req: Request, res: Response) => {
   const { category, id } = req.params;
 
   const user = (req as any).user;
-  
+
   if (user && !id) {
     const product = await getBoutiksProduct(user._id);
     res.status(200).json({ status: "Success", data: product });
@@ -93,21 +104,17 @@ const addNewVariant = expressAsyncHandler(
     const data = req.body;
     const variant = await addProductVariant(id, data);
     if (!variant) {
-      res
-        .status(400)
-        .json({
-          status: "Failed",
-          message: "An error as occured! please try again later",
-        });
+      res.status(400).json({
+        status: "Failed",
+        message: "An error as occured! please try again later",
+      });
       return;
     }
 
-    res
-      .status(201)
-      .json({
-        status: "Success",
-        message: "Product variant is added successfully!",
-      });
+    res.status(201).json({
+      status: "Success",
+      message: "Product variant is added successfully!",
+    });
   },
 );
 
@@ -119,15 +126,12 @@ const deleteBoutiksProduct = expressAsyncHandler(
       res.status(401).json({ status: "Failed", message: "Unauthorized" });
       return;
     }
-
     const newProduct = await deleteProduct(id);
     if (!newProduct) {
-      res
-        .status(400)
-        .json({
-          status: "Failed",
-          message: "An error as occured! please try again later",
-        });
+      res.status(400).json({
+        status: "Failed",
+        message: "An error as occured! please try again later",
+      });
       return;
     }
     newProduct.photos.forEach((photo: string, index: number) => {
@@ -145,42 +149,39 @@ const deleteBoutiksProduct = expressAsyncHandler(
       });
     });
 
-    res
-      .status(201)
-      .json({
-        status: "Success",
-        message: "Product deleted successfully!",
-        data: newProduct,
-      });
+    await deleteProductCommand(id);
+
+    res.status(201).json({
+      status: "Success",
+      message: "Product deleted successfully!",
+      data: newProduct,
+    });
   },
 );
 
 const removeVariant = expressAsyncHandler(
   async (req: Request, res: Response) => {
-    const { id, variant_id } = req.params;
+    const { id, variant_id, valueName } = req.params;
     const user = (req as any).user;
     if (!user) {
       res.status(401).json({ status: "Failed", message: "Unauthorized" });
       return;
     }
-    const product = await deleteVariant(id, variant_id);
+    console.log(valueName)
+    const product = await deleteVariant(id, variant_id, valueName);
     if (!product) {
-      res
-        .status(400)
-        .json({
-          status: "Failed",
-          message: "An error as occured! please try again later",
-        });
+      res.status(400).json({
+        status: "Failed",
+        message: "An error as occured! please try again later",
+      });
       return;
     }
 
-    res
-      .status(201)
-      .json({
-        status: "Success",
-        message: "Product deleted successfully!",
-        data: product,
-      });
+    res.status(201).json({
+      status: "Success",
+      message: "Product variant deleted successfully!",
+      data: product,
+    });
   },
 );
 
@@ -190,38 +191,43 @@ const updateProductVariant = expressAsyncHandler(
     const data = req.body;
     const variant = await updateVariant(id, variant_id, data);
     if (!variant) {
-      res
-        .status(400)
-        .json({
-          status: "Failed",
-          message: "An error as occured! please try again later",
-        });
+      res.status(400).json({
+        status: "Failed",
+        message: "An error as occured! please try again later",
+      });
       return;
     }
 
-    res
-      .status(201)
-      .json({
-        status: "Success",
-        message: "Product variant is added successfully!",
-      });
+    res.status(201).json({
+      status: "Success",
+      message: "Product variant is added successfully!",
+    });
   },
 );
 
-const search_product = expressAsyncHandler(async(req: Request, res: Response)=>{
-  const {q} = req.query;
-  try {
-   const product = await searchProduct(q as string);
-   if(!product){
-    res.status(404).json({message:"Cannot find a product!"});
-    return;
-   }
+const search_product = expressAsyncHandler(
+  async (req: Request, res: Response) => {
+    const { q,location } = req.query;
+    try {
+      let product ;
+      if(!location){
+        product =  await searchProduct(q as string);
+      }
+      if(location){
+        console.log(location)
+        product =  await searchProduct(q as string, location as string);
+      }
+      if (!product) {
+        res.status(404).json({ message: "Cannot find a product!" });
+        return;
+      }
 
-   res.status(200).json({data: product});
-  } catch (error) {
-    throw error;
-  }
-})
+      res.status(200).json({ data: product });
+    } catch (error) {
+      throw error;
+    }
+  },
+);
 
 export {
   storeProduct,

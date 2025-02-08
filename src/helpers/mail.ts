@@ -21,7 +21,7 @@ const emailSender=  async (object: any)=>{
     }
 }
 
-const sendEmail = async(data: any, to: string)=>{
+const sendEmail = async(data: any, to: string,subject:string)=>{
     const htmlTemplate = fs.readFileSync(
       path.join(__dirname, "..", "..", "public", "template", "email.html"),
       "utf8",
@@ -32,7 +32,7 @@ const sendEmail = async(data: any, to: string)=>{
       const mailOption = {
         from: process.env.EMAIL_USER,
         to: to,
-        subject: "Verification email",
+        subject: subject,
         html: htmlContent,
         attachements: [
           {
