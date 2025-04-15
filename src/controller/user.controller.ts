@@ -10,7 +10,7 @@ import {
   updateUser,
 } from "../service/user.service";
 import IUser from "../interface/user.interface";
-import bcrypt from "bcrypt";
+import bcrypt, { compare } from "bcrypt";
 import jwt from "jsonwebtoken";
 import { findUserGroupId } from "../service/user_group.service";
 import IUserGroupMember from "../interface/user_group_member.interface";
@@ -52,9 +52,14 @@ const storeUser = expressAsyncHandler(async (req: Request, res: Response) => {
       user_id: user._id as Types.ObjectId,
     };
   }
-  const usermember : IUserGroupMember = await add_user_in_user_group(addUserIntoUserGroup as IUserGroupMember) as IUserGroupMember;
-  await updateUser(user._id as string,{userGroupMember_id:usermember._id} as IUser);
-  
+  const usermember: IUserGroupMember = (await add_user_in_user_group(
+    addUserIntoUserGroup as IUserGroupMember,
+  )) as IUserGroupMember;
+  await updateUser(
+    user._id as string,
+    { userGroupMember_id: usermember._id } as IUser,
+  );
+
   res.status(201).json({
     status: "Success",
     message: "User created successfully!",
@@ -72,11 +77,55 @@ const login = expressAsyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
+  const verified = await compare(password, user.password);
+  if (!verified) {
+    res.status(412).json({ message: "Mot de passe incorrect!" });
+    return;
+  }
+
   const authUser: IUser = Object.keys(user).reduce((acc: any, userKey) => {
     if (userKey != "password")
       acc[userKey as keyof IUser] = user[userKey as keyof IUser];
     return acc;
   }, {});
+
+  if (!authUser.userGroupMember_id) {
+    res
+      .status(403)
+      .json({ message: "Votre compte est désactivé!", userInfo: authUser });
+    return;
+  }
+
+  if (!user.emailVerifyAt) {
+    const OTPCode: string = getOTP(user.email);
+
+    const data = {
+      title: "Vérification de l'adresse mail!",
+      information: "Code de validation: ",
+      CODE_OTP: OTPCode,
+      message:
+        "Merci d'avoir inscri(e) chez ShoppingMada! Afin de pourvoir se connecté, veuillez confirmé votre adresse en utilisant le code ci-desous",
+      content:
+        "Cette code ne dure que pendant 10 min àpres la récéption de cette message",
+    };
+
+    try {
+      await sendEmail(data, user.email, "Verification de l'adresse mail");
+    } catch (error) {
+      if(error instanceof Error){
+        res.status(413).json({
+          status:"Failed",
+          message:"Verifier votre connextion internet"
+        })
+      }
+    }
+    res.status(401).json({
+      status: "Verification Failed",
+      message: "Veuillez verifier votre adresse Email",
+      userInfo: authUser,
+    });
+    return;
+  }
 
   const token = jwt.sign(authUser, process.env.TOKEN_SECRET as string, {
     expiresIn: "1h",
@@ -85,35 +134,6 @@ const login = expressAsyncHandler(async (req: Request, res: Response) => {
   res.cookie("jwt", token, {
     httpOnly: true,
   });
-
-
-  if(!authUser.userGroupMember_id){
-    res.status(403).json({message:"Votre compte est désactivé!",userInfo: authUser})
-    return;
-  }
-
-
-  if (!user.emailVerifyAt) {
-    const OTPCode: string = getOTP(user.email);
-
-    const data = {
-      title: "Vérification de l'adresse mail!",
-      information:"Code de validation: ",
-      CODE_OTP: OTPCode,
-      message:"Merci d'avoir inscri(e) chez ShoppingMada! Afin de pourvoir se connecté, veuillez confirmé votre adresse en utilisant le code ci-desous",
-      content:"Cette code ne dure que pendant 10 min àpres la récéption de cette message"
-    };
-
-    await sendEmail(data, user.email,"Verification de l'adresse mail");
-    res
-      .status(401)
-      .json({
-        status: "Verification Failed",
-        message: "Veuillez verifier votre adresse Email",
-        userInfo: authUser,
-      });
-    return;
-  }
 
   res.status(201).json({
     status: "Success",
@@ -185,13 +205,15 @@ const handleChangePassword = expressAsyncHandler(
     const OTPCode: string = getOTP(user.email);
     const data = {
       title: "Vérification de l'adresse mail!",
-      information:"Code de validation: ",
+      information: "Code de validation: ",
       CODE_OTP: OTPCode,
-      message:"Merci d'avoir inscri(e) chez ShoppingMada! Afin de pourvoir se connecté, veuillez confirmé votre adresse en utilisant le code ci-desous",
-      content:"Cette code ne dure que pendant 10 min àpres la récéption de cette message"
+      message:
+        "Merci d'avoir inscri(e) chez ShoppingMada! Afin de pourvoir se connecté, veuillez confirmé votre adresse en utilisant le code ci-desous",
+      content:
+        "Cette code ne dure que pendant 10 min àpres la récéption de cette message",
     };
 
-    await sendEmail(data, credentials.email,"Verification de l'adresse mail");
+    await sendEmail(data, credentials.email, "Verification de l'adresse mail");
 
     const { password, ...authUser } = user;
 
@@ -261,12 +283,10 @@ const addProfilePicture = expressAsyncHandler(
       return;
     }
 
-    res
-      .status(200)
-      .json({
-        status: "Success",
-        message: "Profile picture added successfully",
-      });
+    res.status(200).json({
+      status: "Success",
+      message: "Profile picture added successfully",
+    });
   },
 );
 
@@ -274,7 +294,7 @@ const updateUserInfo = expressAsyncHandler(
   async (req: Request, res: Response) => {
     const user = (req as any).user;
     const credentials: IUser = req.body;
-    if(credentials.password){
+    if (credentials.password) {
       const hashPassword = bcrypt.hashSync(credentials.password, 10);
       Object.assign(credentials, { password: hashPassword });
     }
@@ -324,12 +344,10 @@ const blockAccount = expressAsyncHandler(
         .json({ status: "Failed", message: "Cannot find user in user group" });
       return;
     }
-    res
-      .status(201)
-      .json({
-        status: "Success",
-        message: "User account Blocked successfully!",
-      });
+    res.status(201).json({
+      status: "Success",
+      message: "User account Blocked successfully!",
+    });
   },
 );
 
@@ -388,26 +406,40 @@ const checkUserAccount = expressAsyncHandler(
   },
 );
 
-const changeUserGroupToAdmin = expressAsyncHandler(async(req:Request, res:Response)=>{
-  const user = (req as any).user;
-  const {id} = req.params
+const changeUserGroupToAdmin = expressAsyncHandler(
+  async (req: Request, res: Response) => {
+    const user = (req as any).user;
+    const { id } = req.params;
 
-  if(!user){
-    res.status(401).json({status:"Failed",message:"Vous devez vous connécté tout d'abord"})
-    return;
-  }
+    if (!user) {
+      res
+        .status(401)
+        .json({
+          status: "Failed",
+          message: "Vous devez vous connécté tout d'abord",
+        });
+      return;
+    }
 
-  const userGroup = await findUserGroupId("Super Admin");
-  const newUserGroup = await add_user_in_user_group({user_id:new Types.ObjectId(id), usergroup_id: userGroup?._id as Types.ObjectId} as IUserGroupMember)
-  if(!newUserGroup){
-    res.status(403).json({status:"Failed", message:"Une erreur est survenu!"})
-    return;
-  }
+    const userGroup = await findUserGroupId("Super Admin");
+    const newUserGroup = await add_user_in_user_group({
+      user_id: new Types.ObjectId(id),
+      usergroup_id: userGroup?._id as Types.ObjectId,
+    } as IUserGroupMember);
+    if (!newUserGroup) {
+      res
+        .status(403)
+        .json({ status: "Failed", message: "Une erreur est survenu!" });
+      return;
+    }
 
-  await updateUser(id,{userGroupMember_id:newUserGroup._id} as IUser)
+    await updateUser(id, { userGroupMember_id: newUserGroup._id } as IUser);
 
-  res.status(201).json({status:"Success",message:"Modification éffétué avec succès"});
-})
+    res
+      .status(201)
+      .json({ status: "Success", message: "Modification éffétué avec succès" });
+  },
+);
 
 export {
   all,
@@ -424,5 +456,5 @@ export {
   deleteAcount,
   addProfilePicture,
   updateUserInfo,
-  changeUserGroupToAdmin
+  changeUserGroupToAdmin,
 };

@@ -1,7 +1,6 @@
 import { FilterQuery } from "mongoose";
 import User from "../model/user.model";
 import IUser, { LeanUser } from "../interface/user.interface";
-import { compare } from "bcrypt";
 /**
  *
  * @interface credentials
@@ -33,8 +32,8 @@ const getUserWithCredentials = async (
         path: "userGroupMember_id",
         populate: { path: "usergroup_id" },
       });
-    if (user && (await compare(password, user.password))) return user;
-    return null;
+    
+    return user ? user : null;
   } catch (error) {
     throw error;
   }

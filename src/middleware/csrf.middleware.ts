@@ -10,9 +10,6 @@ const csrfProtection = expressAsyncHandler(async(req: Request, res: Response, ne
     req.method === "PUT" ||
     req.method === "DELETE"
   ) {
-    console.log("secret",secret)
-    console.log("token",token)
-    console.log("verify",csrf.verify(secret, token))
     if (!secret || !csrf.verify(secret, token)) {
       res.status(419).json({ status: "Failed", message: "Unauthorized!" });
       return;

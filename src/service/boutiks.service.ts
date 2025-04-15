@@ -21,7 +21,12 @@ const delete_boutiks = async(id: string): Promise<IBoutiks | null> => {
 
 const updateBoutiks= async(id: string, data: IBoutiks): Promise<IBoutiks | null> => {
     try {
-        const boutiks = await Boutiks.findByIdAndUpdate(id, data, {new: true});
+        const updateQuery = (data as any).$push
+      ? { $push: (data as any).$push }
+      : data;
+      console.log(data);
+      
+        const boutiks = await Boutiks.findByIdAndUpdate(id, updateQuery, {new: true});
         return boutiks ? boutiks : null;
     }catch(error){
         throw error

@@ -8,7 +8,7 @@ import validator from "../middleware/validator.middleware";
 const boutiksRoutes = Router();
 boutiksRoutes.post("/boutiks/store", auth, upload_single_image,boutiks_store_validator, validator, storeBoutiksInfo);
 boutiksRoutes.get("/boutiks/info",auth,getBoutiksInfo);
-boutiksRoutes.put("/boutiks/update",auth, upload_single_image,boutiks_store_validator, validator, updateBoutiksInfo);
+boutiksRoutes.put("/boutiks/update",auth, upload_single_image, updateBoutiksInfo);
 boutiksRoutes.put("/boutiks",auth, boutiks_store_validator, validator, updateBoutiksInfo);
 boutiksRoutes.delete("/boutiks",auth, deleteBoutiks);
 export default boutiksRoutes;
