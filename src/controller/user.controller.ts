@@ -112,13 +112,21 @@ const login = expressAsyncHandler(async (req: Request, res: Response) => {
     try {
       await sendEmail(data, user.email, "Verification de l'adresse mail");
     } catch (error) {
-      if(error instanceof Error){
+      if (error instanceof Error) {
         res.status(413).json({
-          status:"Failed",
-          message:"Verifier votre connextion internet"
-        })
+          status: "Failed",
+          message: "Verifier votre connextion internet",
+        });
+        return;
       }
     }
+    const token = jwt.sign(authUser, process.env.TOKEN_SECRET as string, {
+      expiresIn: "1h",
+    });
+
+    res.cookie("jwt", token, {
+      httpOnly: true,
+    });
     res.status(401).json({
       status: "Verification Failed",
       message: "Veuillez verifier votre adresse Email",
@@ -149,7 +157,7 @@ const regenerateToken = expressAsyncHandler(
 
     if (!updatedUser) {
       res
-        .status(401)
+        .status(405)
         .json({ status: "Failed", message: "User does not exist!" });
       return;
     }
@@ -412,12 +420,10 @@ const changeUserGroupToAdmin = expressAsyncHandler(
     const { id } = req.params;
 
     if (!user) {
-      res
-        .status(401)
-        .json({
-          status: "Failed",
-          message: "Vous devez vous connécté tout d'abord",
-        });
+      res.status(401).json({
+        status: "Failed",
+        message: "Vous devez vous connécté tout d'abord",
+      });
       return;
     }
 
