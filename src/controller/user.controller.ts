@@ -447,6 +447,25 @@ const changeUserGroupToAdmin = expressAsyncHandler(
   },
 );
 
+const authVerify = expressAsyncHandler(async (req: Request, res: Response) => {
+  const userId = (req as any).user.id;
+
+  try {
+    const user = await getUser(userId);
+    if (!user) {
+      res.status(404).json({ message: "Utilisateur introuvable" });
+      return;
+    }
+
+    // Évite d'envoyer le mot de passe
+    const { password, ...safeUser } = user;
+
+    res.status(200).json({ userInfo: safeUser });
+  } catch (err) {
+    res.status(500).json({ message: "Erreur serveur", error: err });
+  }
+});
+
 export {
   all,
   storeUser,
@@ -463,4 +482,5 @@ export {
   addProfilePicture,
   updateUserInfo,
   changeUserGroupToAdmin,
+  authVerify
 };
