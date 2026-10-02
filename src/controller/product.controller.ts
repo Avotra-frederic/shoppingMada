@@ -18,12 +18,24 @@ import path from "path";
 import fs from "fs";
 import { findBoutiks } from "../service/boutiks.service";
 import { deleteProductCommand } from "../service/command.service";
+import xss from "xss";
+import { get_user_group_name } from "../service/user_group_member.service";
 
 const storeProduct = expressAsyncHandler(
   async (req: Request, res: Response) => {
-    const data = req.body;
-    const fileNames = (req as any).fileNames;
-    const boutiks = await findBoutiks((req as any).user._id);
+    const data = { ...req.body, details: xss(String(req.body.details ?? "")) };
+    const fileNames: string[] = (req as any).fileNames ?? [];
+    const currentUser = (req as any).user;
+    const role = await get_user_group_name({ user_id: currentUser._id });
+    if (role !== "Boutiks" && role !== "Super Admin") {
+      res.status(403).json({ status: "Failed", message: "Seuls les vendeurs peuvent gérer les produits." });
+      return;
+    }
+    const boutiks = await findBoutiks(currentUser._id);
+    if (role === "Boutiks" && !boutiks) {
+      res.status(409).json({ status: "Failed", message: "Aucune boutique n'est liée à ce compte." });
+      return;
+    }
     if (req.method === "POST") {
       const newData = {
         ...data,
@@ -43,13 +55,26 @@ const storeProduct = expressAsyncHandler(
 
     if (req.method === "PUT") {
       const { id } = req.params;
-      const { boutiks_id, variant, photos, ...extractData } = data;
-      var newData = null;
-      if (Array.from(fileNames).length > 0) {
-        newData = { ...extractData, photos: fileNames };
-      } else {
-        const { photos, image, ...updateInfo } = extractData;
-        newData = { ...updateInfo, photos: image };
+      const { photos } = data;
+      let retainedPhotos: string[] = [];
+      try {
+        retainedPhotos = typeof photos === "string" ? JSON.parse(photos) : Array.isArray(photos) ? photos : [];
+      } catch {
+        retainedPhotos = [];
+      }
+      const newData = {
+        name: String(data.name ?? "").trim(),
+        description: String(data.description ?? "").trim(),
+        details: xss(String(data.details ?? "")),
+        price: Number(data.price),
+        stock: Number(data.stock),
+        category: String(data.category ?? ""),
+        photos: [...retainedPhotos, ...fileNames].slice(0, 5),
+      };
+      const existingProduct = await getProductById(id);
+      if (!existingProduct || String(existingProduct.owner_id) !== String((req as any).user._id)) {
+        res.status(existingProduct ? 403 : 404).json({ status: "Failed", message: "Produit introuvable ou accès refusé" });
+        return;
       }
       const product = await updateProduct(id, newData as IProduct);
       if (!product) {
@@ -64,7 +89,7 @@ const storeProduct = expressAsyncHandler(
     }
 
     res
-      .status(201)
+      .status(req.method === "POST" ? 201 : 200)
       .json({ status: "Success", message: "Product save successfully !" });
   },
 );
@@ -81,6 +106,10 @@ const getProduct = expressAsyncHandler(async (req: Request, res: Response) => {
   }
   if (id) {
     const product = await getProductById(id);
+    if (!product) {
+      res.status(404).json({ status: "Failed", message: "Produit introuvable." });
+      return;
+    }
     res.status(200).json({ status: "Success", data: product });
     return;
   }
@@ -100,6 +129,12 @@ const addNewVariant = expressAsyncHandler(
     const { id } = req.params;
     if (!id) {
       res.status(401).json({ status: "Failed", message: "Unauthorized!" });
+      return;
+    }
+    const existingProduct = await getProductById(id);
+    if (!existingProduct || String(existingProduct.owner_id) !== String((req as any).user._id)) {
+      res.status(existingProduct ? 403 : 404).json({ status: "Failed", message: "Produit introuvable ou accès refusé" });
+      return;
     }
     const data = req.body;
     const variant = await addProductVariant(id, data);
@@ -126,6 +161,11 @@ const deleteBoutiksProduct = expressAsyncHandler(
       res.status(401).json({ status: "Failed", message: "Unauthorized" });
       return;
     }
+    const existingProduct = await getProductById(id);
+    if (!existingProduct || String(existingProduct.owner_id) !== String(user._id)) {
+      res.status(existingProduct ? 403 : 404).json({ status: "Failed", message: "Produit introuvable ou accès refusé" });
+      return;
+    }
     const newProduct = await deleteProduct(id);
     if (!newProduct) {
       res.status(400).json({
@@ -144,7 +184,6 @@ const deleteBoutiksProduct = expressAsyncHandler(
       );
       fs.unlink(imagePath, (err) => {
         if (err) {
-          console.log(err);
         }
       });
     });
@@ -167,7 +206,11 @@ const removeVariant = expressAsyncHandler(
       res.status(401).json({ status: "Failed", message: "Unauthorized" });
       return;
     }
-    console.log(valueName)
+    const existingProduct = await getProductById(id);
+    if (!existingProduct || String(existingProduct.owner_id) !== String(user._id)) {
+      res.status(existingProduct ? 403 : 404).json({ status: "Failed", message: "Produit introuvable ou accès refusé" });
+      return;
+    }
     const product = await deleteVariant(id, variant_id, valueName);
     if (!product) {
       res.status(400).json({
@@ -189,6 +232,11 @@ const updateProductVariant = expressAsyncHandler(
   async (req: Request, res: Response) => {
     const { id, variant_id } = req.params;
     const data = req.body;
+    const existingProduct = await getProductById(id);
+    if (!existingProduct || String(existingProduct.owner_id) !== String((req as any).user._id)) {
+      res.status(existingProduct ? 403 : 404).json({ status: "Failed", message: "Produit introuvable ou accès refusé" });
+      return;
+    }
     const variant = await updateVariant(id, variant_id, data);
     if (!variant) {
       res.status(400).json({
@@ -208,13 +256,16 @@ const updateProductVariant = expressAsyncHandler(
 const search_product = expressAsyncHandler(
   async (req: Request, res: Response) => {
     const { q,location } = req.query;
+    if (typeof q !== "string" || !q.trim() || q.length > 100 || (typeof location === "string" && location.length > 100)) {
+      res.status(400).json({ status: "Failed", message: "Le terme de recherche est requis" });
+      return;
+    }
     try {
       let product ;
       if(!location){
         product =  await searchProduct(q as string);
       }
       if(location){
-        console.log(location)
         product =  await searchProduct(q as string, location as string);
       }
       if (!product) {

@@ -13,7 +13,7 @@ const createNewSubscription = async(data : ISubscription) : Promise<ISubscriptio
 
 const updateSubscription = async(newData : ISubscription, id: string) : Promise<ISubscription | null> =>{
     try {
-        const subscription = await Subscription.findByIdAndUpdate(id, newData, {new:true}).lean<ISubscription>().populate("owner_id");
+        const subscription = await Subscription.findOneAndUpdate({ _id: id, payementStatus: "Pending" }, newData, {new:true, runValidators:true}).lean<ISubscription>().populate("owner_id");
         return subscription ? subscription : null
     } catch (error) {
         throw error;

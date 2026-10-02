@@ -24,7 +24,7 @@ const store_personnal_info= expressAsyncHandler(async(req: Request, res: Respons
         }
         res.status(201).json({status:"Success", message:"Personnal info saved successfully"});
     } catch (error) {
-        console.log(error, "mon error");
+        next(error);
     }
 });
 
@@ -40,7 +40,7 @@ const getPersonalInfo = expressAsyncHandler(async(req: Request, res:Response)=>{
 
 const updatePersonnalInfo = expressAsyncHandler(async(req: Request, res:Response)=>{
     const data = req.body;
-    const fileNames = (req as any).fileNames;
+    const fileNames = (req as any).fileNames ?? [];
     const [frontImage, backImage] = fileNames;
     const newData ={...data, frontImage, backImage}
     const updatePersonnalInfo = await completPersonnalInfo((req as any).user._id, newData);

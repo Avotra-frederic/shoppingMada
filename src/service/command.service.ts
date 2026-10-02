@@ -1,4 +1,3 @@
-import { Mongoose } from "mongoose";
 import ICommand from "../interface/command.interface";
 import Command from "../model/command.model";
 
@@ -11,18 +10,18 @@ const addCommande = async(data:ICommand): Promise<ICommand | null> => {
         }
 }
 
-const getBoutiksCommand = async(id: string): Promise<ICommand | null> => {
+const getBoutiksCommand = async(id: string): Promise<ICommand[] | null> => {
     try {
-        const commande = await Command.find({boutiks_id: id}).lean<ICommand>().populate("product_id").populate("owner_id");
+        const commande = await Command.find({boutiks_id: id}).lean<ICommand[]>().populate({path:"product_id",populate:{path:"boutiks_id"}}).populate("owner_id");
         return commande ? commande : null;
     } catch (error) {
         throw error;
     }
 }
 
-const getClientCommand = async(id: string): Promise<ICommand | null> => {
+const getClientCommand = async(id: string): Promise<ICommand[] | null> => {
     try {
-        const commande = await Command.find({owner_id: id}).lean<ICommand>().populate("product_id").populate("owner_id");
+        const commande = await Command.find({owner_id: id}).lean<ICommand[]>().populate({path:"product_id",populate:{path:"boutiks_id"}}).populate("owner_id");
         return commande ? commande : null;
     } catch (error) {
         throw error;
@@ -31,7 +30,7 @@ const getClientCommand = async(id: string): Promise<ICommand | null> => {
 
 const updateStatus =  async(id: string, newStatus: string)=>{
     try {
-        const commande =  await Command.findByIdAndUpdate(id,{status:newStatus},{new:true}).lean<ICommand>().populate({path:"product_id", populate:{path:"boutiks_id"}}).populate("owner_id");
+        const commande =  await Command.findOneAndUpdate({_id: id, status: "Pending"},{status:newStatus},{new:true,runValidators:true}).lean<ICommand>().populate({path:"product_id", populate:{path:"boutiks_id"}}).populate("owner_id");
         return commande ? commande : null;
     } catch (error) {
         throw error;
@@ -55,7 +54,7 @@ const deleteProductCommand = async(id:string)=>{
 
 const getCommandeById = async(id:string): Promise<ICommand | null> =>{
     try {
-        const command = await Command.findById(id).lean<ICommand>().populate("owner_id").populate("product_id");
+        const command = await Command.findById(id).lean<ICommand>().populate("owner_id").populate({path:"product_id",populate:{path:"boutiks_id"}});
         return command ? command : null
     } catch (error) {
         throw error;

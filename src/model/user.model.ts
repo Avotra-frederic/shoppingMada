@@ -20,6 +20,9 @@ const userScheme = new Schema<IUser>({
     emailVerifyAt:{
         type: Date,
     },
+    emailOtpHash: { type: String, select: false },
+    emailOtpExpiresAt: { type: Date, select: false },
+    emailOtpAttempts: { type: Number, default: 0, select: false },
     password:{
         type: String,
         required : true,

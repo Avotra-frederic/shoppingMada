@@ -1,21 +1,39 @@
 import  fs  from 'fs';
-import { createTransport } from "nodemailer";
-import SMTPTransport from "nodemailer/lib/smtp-transport";
+import { createTransport, Transporter } from "nodemailer";
 import path from "path";
 import Handlebars from "handlebars";
 
-const transport = createTransport({
-    service: process.env.EMAIL_HOST as string,
-    auth:{
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASSWORD
-    }
+let transport: Transporter | undefined;
 
-} as SMTPTransport.Options)
+const getTransport = (): Transporter => {
+  if (transport) return transport;
+
+  const user = process.env.EMAIL_USER?.trim();
+  const password = process.env.EMAIL_PASSWORD?.replace(/\s+/g, "");
+  if (!user || !password) {
+    throw new Error("Email transport is not configured: set EMAIL_USER and EMAIL_PASSWORD.");
+  }
+
+  const legacyHost = process.env.EMAIL_HOST?.trim();
+  const host = process.env.SMTP_HOST?.trim() ||
+    (legacyHost?.includes(".") ? legacyHost : "smtp.gmail.com");
+  const port = Number(process.env.SMTP_PORT || 465);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("Email transport is not configured: SMTP_PORT must be a valid port.");
+  }
+
+  transport = createTransport({
+    host,
+    port,
+    secure: process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : port === 465,
+    auth: { user, pass: password },
+  });
+  return transport;
+};
 
 const emailSender=  async (object: any)=>{
     try {
-        await transport.sendMail(object)
+        await getTransport().sendMail(object)
     } catch (error) {
         throw error
     }
@@ -34,7 +52,7 @@ const sendEmail = async(data: any, to: string,subject:string)=>{
         to: to,
         subject: subject,
         html: htmlContent,
-        attachements: [
+        attachments: [
           {
             filename: "background.png",
             path: path.join(

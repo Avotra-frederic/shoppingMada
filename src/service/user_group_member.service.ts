@@ -8,10 +8,11 @@ const add_user_in_user_group = async (
   data: IUserGroupMember,
 ): Promise<IUserGroupMember | null> => {
   if (data == null) return null;
-  const newUserGroupMember = new UserGroupMember(data);
-  await newUserGroupMember.save();
-  if (!newUserGroupMember) return null;
-  return newUserGroupMember;
+  return UserGroupMember.findOneAndUpdate(
+    { user_id: data.user_id },
+    { $set: { usergroup_id: data.usergroup_id } },
+    { new: true, upsert: true, setDefaultsOnInsert: true },
+  );
 };
 
 const get_user_group_name = async ({

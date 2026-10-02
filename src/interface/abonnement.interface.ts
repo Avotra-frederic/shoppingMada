@@ -12,4 +12,5 @@ export default interface ISubscription extends Document{
     payementStatus: "Pending" | "Completed" |"Rejected" | "Canceled"
     startDate: Date,
     endDate : Date
+    motif?: string
 }

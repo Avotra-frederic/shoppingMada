@@ -14,181 +14,163 @@ import ICommand from "../interface/command.interface";
 import { getProductById } from "../service/product.service";
 import sendEmail from "../helpers/mail";
 
-const getAllCommand = expressAsyncHandler(
-  async (req: Request, res: Response) => {
-    const user = (req as any).user;
-    const { id } = req.params;
-    if (!user) {
-      res.status(401).json({ status: "Failed", message: "Unauthorized!" });
+const canAccessCommand = async (user: any, command: any) => {
+  const role = await get_user_group_name({ user_id: user._id });
+  const isClientOwner = String((command.owner_id as any)?._id ?? command.owner_id) === String(user._id);
+  const shopId = command.boutiks_id?._id ?? command.boutiks_id;
+  const isShopOwner = user.boutiks_id && String(shopId) === String(user.boutiks_id._id ?? user.boutiks_id);
+  return { role, allowed: isClientOwner || (role === "Boutiks" && isShopOwner) };
+};
+
+const getAllCommand = expressAsyncHandler(async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  const { id } = req.params;
+  if (id) {
+    const command = await getCommandeById(id);
+    if (!command) {
+      res.status(404).json({ status: "Failed", message: "Commande introuvable." });
       return;
     }
-
-    if (id) {
-      const command = await getCommandeById(id);
-      if (!command) {
-        res
-          .status(404)
-          .json({ status: "Failed", message: "Commande introvable!" });
-        return;
-      }
-
-      res.status(200).json({ status: "success", data: command });
+    const { allowed } = await canAccessCommand(user, command);
+    if (!allowed) {
+      res.status(403).json({ status: "Failed", message: "Accès refusé." });
       return;
     }
+    res.status(200).json({ status: "Success", data: command });
+    return;
+  }
 
-    const usergroupname = await get_user_group_name({ user_id: user._id });
-    if (!usergroupname) {
-      res
-        .status(400)
-        .json({ status: "Failed", message: "Cannot find user group name" });
+  const role = await get_user_group_name({ user_id: user._id });
+  if (role === "Boutiks") {
+    const shop = await findBoutiks(user._id);
+    res.status(200).json({ status: "Success", data: shop ? await getBoutiksCommand(String(shop._id)) ?? [] : [] });
+    return;
+  }
+  if (role === "Client") {
+    res.status(200).json({ status: "Success", data: await getClientCommand(String(user._id)) ?? [] });
+    return;
+  }
+  res.status(403).json({ status: "Failed", message: "Accès refusé." });
+});
+
+const addNewCommande = expressAsyncHandler(async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  const { product_id, quantity, variants = {} } = req.body;
+  if (!product_id || !Number.isInteger(Number(quantity)) || Number(quantity) < 1 || Number(quantity) > 100) {
+    res.status(400).json({ status: "Failed", message: "Produit ou quantité invalide." });
+    return;
+  }
+  const role = await get_user_group_name({ user_id: user._id });
+  if (role !== "Client") {
+    res.status(403).json({ status: "Failed", message: "Seuls les clients peuvent commander." });
+    return;
+  }
+  const product = await getProductById(String(product_id));
+  if (!product || String(product.owner_id) === String(user._id)) {
+    res.status(404).json({ status: "Failed", message: "Produit introuvable." });
+    return;
+  }
+  if (product.stock !== undefined && product.stock < Number(quantity)) {
+    res.status(409).json({ status: "Failed", message: "Stock insuffisant." });
+    return;
+  }
+
+  let unitPrice = Number(product.price);
+  if (!variants || typeof variants !== "object" || Array.isArray(variants)) {
+    res.status(400).json({ status: "Failed", message: "Les options du produit sont invalides." });
+    return;
+  }
+  for (const [variantName, selectedValue] of Object.entries(variants as Record<string, string>)) {
+    const variant = product.variant?.find((item: any) => item.name === variantName);
+    const value = variant?.values?.find((item) => item.value === selectedValue);
+    if (!value) {
+      res.status(400).json({ status: "Failed", message: `Variante invalide : ${variantName}` });
       return;
     }
+    unitPrice += Number(value.additionalPrice ?? 0);
+  }
 
-    switch (usergroupname) {
-      case "Boutiks":
-        const boutiks = await findBoutiks(user._id);
-        if (!boutiks) {
-          res
-            .status(400)
-            .json({ status: "Failed", message: "Cannot find boutiks" });
-          break;
-        }
+  const shopId = (product.boutiks_id as any)?._id ?? product.boutiks_id;
+  if (!shopId) {
+    res.status(409).json({ status: "Failed", message: "Le produit n'est rattaché à aucune boutique." });
+    return;
+  }
+  const newCommand = await addCommande({
+    product_id, quantity: Number(quantity), variants, owner_id: user._id,
+    boutiks_id: shopId, total: unitPrice * Number(quantity), status: "Pending",
+  } as ICommand);
+  if (!newCommand) {
+    res.status(400).json({ status: "Failed", message: "Impossible de créer la commande." });
+    return;
+  }
+  const shop = product.boutiks_id as any;
+  if (shop.email) {
+    await sendEmail({
+      title: "Nouvelle commande",
+      message: `Vous avez reçu une commande de ${user.email}.`,
+      information: "Une nouvelle commande est disponible dans votre espace vendeur.",
+      content: "Connectez-vous à ShoppingMada pour la consulter.",
+    }, shop.email, "Nouvelle commande");
+  }
+  res.status(201).json({ status: "Success", message: "Commande créée.", data: newCommand });
+});
 
-        const command = await getBoutiksCommand(
-          boutiks?._id as unknown as string,
-        );
-        if (!command) {
-          res
-            .status(400)
-            .json({ status: "Failed", message: "Cannot find command" });
-          break;
-        }
+const updateCommande = expressAsyncHandler(async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  const { id } = req.params;
+  const command = await getCommandeById(id);
+  if (!command) {
+    res.status(404).json({ status: "Failed", message: "Commande introuvable." });
+    return;
+  }
+  const { role, allowed } = await canAccessCommand(user, command);
+  if (!allowed || command.status !== "Pending") {
+    res.status(403).json({ status: "Failed", message: "Cette commande ne peut pas être modifiée." });
+    return;
+  }
+  const { status, motif } = req.body;
+  const owner = String((command.owner_id as any)?._id ?? command.owner_id) === String(user._id);
+  const validTransition = owner ? status === "Canceled" : role === "Boutiks" && ["Accepted", "Rejected"].includes(status);
+  if (!validTransition) {
+    res.status(400).json({ status: "Failed", message: "Transition de statut invalide." });
+    return;
+  }
+  if (status === "Rejected" && (typeof motif !== "string" || !motif.trim())) {
+    res.status(400).json({ status: "Failed", message: "Le motif de refus est requis." });
+    return;
+  }
+  const updated = await updateStatus(id, status);
+  if (!updated) {
+    res.status(400).json({ status: "Failed", message: "Impossible de mettre à jour la commande." });
+    return;
+  }
+  const client = command.owner_id as any;
+  if (client.email && status !== "Canceled") {
+    await sendEmail({
+      title: "Mise à jour de votre commande",
+      message: status === "Accepted" ? "Votre commande a été acceptée." : "Votre commande a été refusée.",
+      information: status === "Rejected" ? `Motif : ${motif.trim()}` : "",
+      content: "Connectez-vous à ShoppingMada pour consulter les détails.",
+    }, client.email, "Mise à jour de votre commande");
+  }
+  res.status(200).json({ status: "Success", message: "Commande mise à jour.", data: updated });
+});
 
-        res.status(200).json({ status: "Success", data: command });
-        break;
-      case "Client":
-        const commandClient = await getClientCommand(user._id);
-        if (!commandClient) {
-          res
-            .status(400)
-            .json({ status: "Failed", message: "Cannot find command" });
-          break;
-        }
-        res.status(200).json({ status: "Success", data: commandClient });
-        break;
-
-      default:
-        break;
-    }
-  },
-);
-
-const addNewCommande = expressAsyncHandler(
-  async (req: Request, res: Response) => {
-    const user = (req as any).user;
-    const data = req.body;
-    console.log(data);
-    if (!user) {
-      res.status(401).json({ status: "Failed", message: "Unauthorized!" });
-      return;
-    }
-
-    const product = await getProductById(data.product_id);
-    if (!product) {
-      res
-        .status(400)
-        .json({ status: "Failed", message: "Cannot find product" });
-      return;
-    }
-
-    const newData = {
-      ...data,
-      owner_id: user._id,
-      boutiks_id: product.boutiks_id._id,
-    };
-
-    const newCommande = await addCommande(newData as ICommand);
-    if (!newCommande) {
-      res
-        .status(400)
-        .json({ status: "Failed", message: "Cannot add commande" });
-      return;
-    }
-    const email = {
-      title: "Information",
-      message: `Bonjour, Vous avez reçu une nouveau commande de la part de: `,
-      information:user.email,
-      content:
-        "Vous pouvez le voir dans la liste de commande de votre espace vendeur chez Shoppingmada. Merci de votre confiance",
-    };
-    await sendEmail(email, product.boutiks_id.email,"Nouveau commande")
-    res.status(201).json({
-      status: "Success",
-      message: "Commande added successfully!",
-      data: newCommande,
-    });
-  },
-);
-
-const updateCommande = expressAsyncHandler(
-  async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const { status, motif } = req.body;
-    console.log(status);
-    const commande = await updateStatus(id, status);
-    if (!commande) {
-      res
-        .status(400)
-        .json({ status: "Failed", message: "Cannot update commande" });
-      return;
-    }
-
-    if(motif){
-      const email = {
-        title: "Information",
-        message: `Bonjour, je vous tient informer que votre commande de ${(commande as any).product_id.name} chez ${(commande as any).product_id.boutiks_id.name} a été rejeter on raison de: `,
-        information:motif,
-        content:
-          "Merci de votre comprehension, si vous aurez besoin plus d'information merci de contacter l'adminitrateur de notre plateforme",
-      };
-      await sendEmail(email, (commande as any).owner_id.email,"Commande dans une boutique de ShoppingMada")
-    }
-
-    if(status === "Accepted"){
-      const email = {
-        title: "Information",
-        message: `Bonjour, je vous tient informer que votre achat de ${(commande as any).product_id.name} chez ${(commande as any).product_id.boutiks_id.name} a été validé `,
-        information:"Achat accépté!",
-        content:
-          `Merci de votre confiance, pour plus d'information vous pouvez contacter ${(commande as any).product_id.boutiks_id.name} via ${(commande as any).product_id.boutiks_id.email}`,
-      };
-      await sendEmail(email, (commande as any).owner_id.email,"Commande dans une boutique de ShoppingMada")
-    }
-    
-    res.status(201).json({
-      status: "Success",
-      message: "Commande updated successfully!",
-      data: commande,
-    });
-  },
-);
-
-const removeCommand = expressAsyncHandler(
-  async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const commande = await deleteCommande(id);
-    if (!commande) {
-      res
-        .status(400)
-        .json({ status: "Failed", message: "Cannot delete commande" });
-      return;
-    }
-    res.status(201).json({
-      status: "Success",
-      message: "Commande deleted successfully!",
-      data: commande,
-    });
-  },
-);
+const removeCommand = expressAsyncHandler(async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  const command = await getCommandeById(req.params.id);
+  if (!command) {
+    res.status(404).json({ status: "Failed", message: "Commande introuvable." });
+    return;
+  }
+  const { role, allowed } = await canAccessCommand(user, command);
+  const isOwner = String((command.owner_id as any)?._id ?? command.owner_id) === String(user._id);
+  if (!allowed || role !== "Client" || !isOwner || command.status !== "Pending") {
+    res.status(403).json({ status: "Failed", message: "Cette commande ne peut pas être supprimée." });
+    return;
+  }
+  const deleted = await deleteCommande(req.params.id);
+  res.status(200).json({ status: "Success", message: "Commande supprimée.", data: deleted });
+});
 
 export { getAllCommand, addNewCommande, updateCommande, removeCommand };

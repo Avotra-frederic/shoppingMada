@@ -18,10 +18,9 @@ const registerValidator = [
     .withMessage("Email adresse must be a string")
     .notEmpty()
     .withMessage("email addresse is required")
-    .matches(
-      /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|[a-zA-Z]{2,}.*)\.(mg|fr|com|org|io|[a-zA-Z]{2,})$/
-    )
-    .withMessage("please enter a valid email"),
+    .isEmail()
+    .withMessage("please enter a valid email")
+    .normalizeEmail(),
   body("password")
     .isStrongPassword({
       minLength: 8,

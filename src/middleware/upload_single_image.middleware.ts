@@ -1,14 +1,28 @@
 import { NextFunction, Request, Response } from "express";
 import expressAsyncHandler from "express-async-handler";
-import upload, { uploadImage } from "../config/uploadsingle_multer";
+import upload, { uploadImage, uploadProductImages } from "../config/uploadsingle_multer";
+
+const normalizeBoutikCategories = (req: Request) => {
+    const value = req.body?.product_category;
+    if (typeof value === "string") {
+        try {
+            const parsed = JSON.parse(value);
+            req.body.product_category = Array.isArray(parsed) ? parsed : [];
+        } catch {
+            req.body.product_category = [];
+        }
+    }
+};
 
 const upload_single_image = expressAsyncHandler(async(req: Request, res: Response, next: NextFunction) => {
     upload(req, res, async(err : any)=>{
         if (err) return next(err);
         if((req as any).file){
             (req as any).fileName = (req as any).file.filename;
+            normalizeBoutikCategories(req);
             next()
         } else {
+            normalizeBoutikCategories(req);
             next();
         }
     });
@@ -27,4 +41,12 @@ const uploadMultiImage = expressAsyncHandler(async(req: Request, res: Response, 
     });
 })
 
-export {upload_single_image, uploadMultiImage};
+const uploadProductImageFiles = expressAsyncHandler(async(req: Request, res: Response, next: NextFunction) => {
+    uploadProductImages(req, res, async(err: any) => {
+        if (err) return next(err);
+        (req as any).fileNames = (req.files as Express.Multer.File[] | undefined)?.map(file => file.filename) ?? [];
+        next();
+    });
+});
+
+export {upload_single_image, uploadMultiImage, uploadProductImageFiles};

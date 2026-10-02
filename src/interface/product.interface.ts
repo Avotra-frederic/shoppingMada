@@ -9,7 +9,11 @@ export default interface IProduct extends Document{
     price: number,
     stock?: number,
     photos:[string],
-    variant? : [{name: string,  additionalPrice: number, values?: string[]}],
+    variant?: Array<{
+        name: string;
+        additionalPrice?: number;
+        values?: Array<{ value: string; additionalPrice?: number; stock?: number }>;
+    }>;
     owner_id: any,
     boutiks_id: any,
     metadata?:any

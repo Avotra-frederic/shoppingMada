@@ -28,9 +28,10 @@ const SubscriptionSheme = new Schema<ISubscription>({
     },
     payementStatus:{
         type:String,
-        enum:["Pending","Pompleted","Rejected","Canceled"],
+        enum:["Pending","Completed","Rejected","Canceled"],
         default:"Pending"
-    }
+    },
+    motif: { type: String, maxlength: 500 },
 },{timestamps:true});
 
 const Subscription = models.Subscription || model<ISubscription>("Subscription",SubscriptionSheme)

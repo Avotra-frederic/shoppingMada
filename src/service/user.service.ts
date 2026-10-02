@@ -1,6 +1,7 @@
 import { FilterQuery } from "mongoose";
 import User from "../model/user.model";
 import IUser, { LeanUser } from "../interface/user.interface";
+import crypto from "crypto";
 /**
  *
  * @interface credentials
@@ -19,7 +20,8 @@ interface credentials {
 const getUserWithCredentials = async (
   credentials: credentials,
 ): Promise<LeanUser | null> => {
-  const { emailOrPhone, password } = credentials;
+  const { password } = credentials;
+  const emailOrPhone = credentials.emailOrPhone.trim().toLowerCase();
   const filter: FilterQuery<IUser> = {
     $or: [{ email: emailOrPhone }, { phonenumber: emailOrPhone }],
   };
@@ -78,15 +80,36 @@ const checkExistingUser = async (credentials: IUser): Promise<IUser | null> => {
  * @param id
  * @returns
  */
-const verifyEmailUser = async (id: string): Promise<IUser | null> => {
-  try {
-    const user = await User.findByIdAndUpdate(id, {
-      emailVerifyAt: Date.now(),
-    }).exec();
-    return user ? user : null;
-  } catch (error) {
-    throw error;
+const createEmailOtp = async (id: string): Promise<string> => {
+  const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, "0");
+  const hash = crypto.createHash("sha256").update(`${id}:${code}`).digest("hex");
+  await User.findByIdAndUpdate(id, {
+    emailOtpHash: hash,
+    emailOtpExpiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    emailOtpAttempts: 0,
+  });
+  return code;
+};
+
+const verifyEmailOtp = async (id: string, code: string): Promise<IUser | null> => {
+  const user = await User.findById(id).select("+emailOtpHash +emailOtpExpiresAt +emailOtpAttempts");
+  if (!user?.emailOtpHash || !user.emailOtpExpiresAt || user.emailOtpExpiresAt.getTime() <= Date.now() || (user.emailOtpAttempts ?? 0) >= 5) return null;
+  const hash = crypto.createHash("sha256").update(`${id}:${code}`).digest("hex");
+  const actual = Buffer.from(user.emailOtpHash, "hex");
+  const expected = Buffer.from(hash, "hex");
+  if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) {
+    await User.updateOne({ _id: id, emailOtpHash: user.emailOtpHash, emailOtpAttempts: { $lt: 5 } }, { $inc: { emailOtpAttempts: 1 } });
+    return null;
   }
+  return User.findOneAndUpdate({
+    _id: id,
+    emailOtpHash: hash,
+    emailOtpExpiresAt: { $gt: new Date() },
+    emailOtpAttempts: { $lt: 5 },
+  }, {
+    emailVerifyAt: new Date(),
+    $unset: { emailOtpHash: 1, emailOtpExpiresAt: 1, emailOtpAttempts: 1 },
+  }, { new: true });
 };
 
 const deleteUser = async (id: string): Promise<IUser | null> => {
@@ -147,7 +170,8 @@ export {
   getUserWithCredentials,
   createUser,
   checkExistingUser,
-  verifyEmailUser,
+  createEmailOtp,
+  verifyEmailOtp,
   deleteUser,
   updateUser,
   getUser,

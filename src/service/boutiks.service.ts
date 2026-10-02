@@ -24,7 +24,6 @@ const updateBoutiks= async(id: string, data: IBoutiks): Promise<IBoutiks | null>
         const updateQuery = (data as any).$push
       ? { $push: (data as any).$push }
       : data;
-      console.log(data);
       
         const boutiks = await Boutiks.findByIdAndUpdate(id, updateQuery, {new: true});
         return boutiks ? boutiks : null;

@@ -149,17 +149,20 @@ const deleteVariant = async (
 };
 
 const searchProduct = async(q: string, location?:string): Promise<IProduct | IProduct[] | [] > =>{
+  if (!q?.trim()) return [];
+  const safeQuery = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   let product = await Product.find({
     $or:[
-      {name: {$regex: q, $options:"i"}},
-      {description:{$regex: q, $options:"i"}},
-      {details:{$regex: q, $options:"i"}},
+      {name: {$regex: safeQuery, $options:"i"}},
+      {description:{$regex: safeQuery, $options:"i"}},
+      {details:{$regex: safeQuery, $options:"i"}},
     ]
   }).lean<IProduct[]>().populate("boutiks_id");
 
 
   if(location){
-    product = product.filter(pr => pr.boutiks_id && pr.boutiks_id.ville && new RegExp(location,"i").test(pr.boutiks_id.ville))
+    const safeLocation = location.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    product = product.filter(pr => pr.boutiks_id && pr.boutiks_id.ville && new RegExp(safeLocation,"i").test(pr.boutiks_id.ville))
   }
   return product.length > 0? product : [];
 }

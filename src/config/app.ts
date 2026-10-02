@@ -28,13 +28,13 @@ const corsOption: cors.CorsOptions = {
   
 };
 const app = express();
-app.use(express.json());
 app.use(cors(corsOption));
-app.use(express.urlencoded({ extended: true }));
 app.use(helmet());
 app.use(compression());
 app.use(morgan("dev"));
 app.use(cookieParser());
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(mongoSanitize());
 
 app.use("/api/v1/uploads", (req: Request, res: Response, next: NextFunction) => {
@@ -65,18 +65,6 @@ app.get(
 
 ;
 
-app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
-  console.log("CSRF ERROR", _req.cookies["xsrf-token"]);
-  if (err.code === "EBADCSRFTOKEN") {
-    res.status(403).json({
-      status: "Error",
-      message: "Invalid CSRF token",
-    });
-    return;
-  }
-  res.status(500).json({ status: "Error", message: "Internal Server Error" });
-});
-
 app.use(csrfProtection);
 
 app.get("/api/v1/csrf-token", expressAsyncHandler(async(req: Request, res: Response) => {
@@ -85,6 +73,10 @@ app.get("/api/v1/csrf-token", expressAsyncHandler(async(req: Request, res: Respo
     secret = csrf.secretSync();
     res.cookie("csrf-secret", secret, {
       httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+      maxAge: 24 * 60 * 60 * 1000,
     });
   }
   
@@ -107,5 +99,20 @@ app.use("/api/v1", commentRoutes);
 
 app.use("/api/v1", command_routes);
 app.use("/api/v1", subscriptionRoute);
+app.use((req: Request, res: Response) => {
+  res.status(404).json({ status: "Error", message: `Route introuvable: ${req.method} ${req.path}` });
+});
+app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  if (err.code === "EBADCSRFTOKEN") {
+    res.status(403).json({ status: "Error", message: "Invalid CSRF token" });
+    return;
+  }
+  if (err.type === "entity.too.large") {
+    res.status(413).json({ status: "Error", message: "La requête dépasse la taille maximale autorisée." });
+    return;
+  }
+  const status = err.statusCode || err.status || 500;
+  res.status(status).json({ status: "Error", message: status < 500 ? err.message : "Internal Server Error" });
+});
 
 export default app;

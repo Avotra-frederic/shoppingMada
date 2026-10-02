@@ -15,34 +15,31 @@ const auth = expressAsyncHandler(
     }
 
     try {
-      const decodedToken = jwt.verify(
-        token,
-        process.env.TOKEN_SECRET as string,
-        { ignoreExpiration: true } 
-      ) as JwtPayload;
-
-      const currentTime = Math.floor(Date.now() / 1000); 
-      const isExpired = decodedToken.exp! <= currentTime;
-
-      if (isExpired) {
-        const newToken = jwt.sign(
-          { _id: decodedToken._id, email: decodedToken.email, username:decodedToken.username, phonenumber: decodedToken.phonenumber }, 
-          process.env.TOKEN_SECRET as string,
-          { expiresIn: "1h" } 
-        );
-        res.cookie("jwt", newToken, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production", 
-          sameSite: "strict",
-        });
-        console.log("Nouveau token gÃ©nÃ©rÃ© et envoyÃ© au client.");
+      const secret = process.env.TOKEN_SECRET;
+      if (!secret) {
+        res.status(500).json({ status: "Error", message: "Authentication is not configured" });
+        return;
+      }
+      const decodedToken = jwt.verify(token, secret) as JwtPayload;
+      const allowedLimitedPaths = decodedToken.tokenPurpose === "password-reset"
+        ? ["/email/verify", "/email/new_verification_code", "/email/reset-password"]
+        : decodedToken.tokenPurpose === "email-verification"
+          ? ["/email/verify", "/email/new_verification_code"]
+          : null;
+      if (req.path === "/email/reset-password" && decodedToken.otpVerified !== true) {
+        res.status(403).json({ status: "Unauthorized", message: "Veuillez vérifier le code reçu par email." });
+        return;
+      }
+      if (allowedLimitedPaths && !allowedLimitedPaths.includes(req.path)) {
+        res.status(403).json({ status: "Unauthorized", message: "This session cannot access this resource." });
+        return;
       }
 
   
       (req as any).user = decodedToken;
       next();
     } catch (error) {
-      console.error("Erreur lors de la vÃ©rification du token :", error);
+      console.error("Erreur lors de la vérification du token :", error);
       res.status(401).json({ status: "Unauthorized", message: "Invalid token!" });
     }
   }

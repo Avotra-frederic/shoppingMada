@@ -17,7 +17,12 @@ import IUser from "../interface/user.interface";
 const storeBoutiksInfo = expressAsyncHandler(
   async (req: Request, res: Response) => {
     const data: IBoutiks = req.body;
-    Object.assign(data, { owner_id: (req as any).user._id });
+    const ownerId = (req as any).user._id;
+    if (await findBoutiks(ownerId)) {
+      res.status(409).json({ status: "Failed", message: "Une boutique existe déjà pour ce compte." });
+      return;
+    }
+    Object.assign(data, { owner_id: ownerId });
     if ((req as any).fileName) {
       data.logo = (req as any).fileName;
     } else {
@@ -37,7 +42,6 @@ const storeBoutiksInfo = expressAsyncHandler(
     const updated_user = await updateUser((req as any).user._id, {
       boutiks_id: createBoutiks._id,
     } as IUser);
-    console.log(updated_user);
     if (!updated_user) {
       res
         .status(500)
@@ -93,10 +97,13 @@ const getBoutiksInfo = expressAsyncHandler(
 const deleteBoutiks = expressAsyncHandler(
   async (req: Request, res: Response) => {
     const user = (req as any).user;
-    const boutiks = await findBoutiks(user._id);
-
-    if (!user && !boutiks) {
+    if (!user) {
       res.status(401).json({ status: "Failed", message: "Unauthorized" });
+      return;
+    }
+    const boutiks = await findBoutiks(user._id);
+    if (!boutiks) {
+      res.status(404).json({ status: "Failed", message: "Boutique introuvable" });
       return;
     }
 
@@ -111,12 +118,15 @@ const deleteBoutiks = expressAsyncHandler(
 const updateBoutiksInfo = expressAsyncHandler(
   async (req: Request, res: Response) => {
     const user = (req as any).user;
+    if (!user) {
+      res.status(401).json({ status: "Failed", message: "Unauthorized" });
+      return;
+    }
     const boutiks = await findBoutiks(user._id);
     const data = req.body;
     const logo = (req as any).fileName;
-
-    if (!user && !boutiks) {
-      res.status(401).json({ status: "Failed", message: "Unauthorized" });
+    if (!boutiks) {
+      res.status(404).json({ status: "Failed", message: "Boutique introuvable" });
       return;
     }
     if (logo) {
@@ -131,8 +141,6 @@ const updateBoutiksInfo = expressAsyncHandler(
       return;
     }
 
-    console.log("controller", data);
-
     await updateBoutiks(boutiks?._id as unknown as string, data);
     res
       .status(200)
@@ -144,9 +152,17 @@ const addNewCategorieINBoutiks = expressAsyncHandler(
   async (req: Request, res: Response) => {
     const { category_id } = req.body;
     const user = (req as any).user;
-    const boutiks = await findBoutiks(user._id);
-    if (!user && !boutiks) {
+    if (!user) {
       res.status(401).json({ status: "Failed", message: "Unauthorized" });
+      return;
+    }
+    const boutiks = await findBoutiks(user._id);
+    if (!boutiks) {
+      res.status(404).json({ status: "Failed", message: "Boutique introuvable" });
+      return;
+    }
+    if (typeof category_id !== "string" || !category_id.trim()) {
+      res.status(400).json({ status: "Failed", message: "Catégorie invalide." });
       return;
     }
     const newBoutiksInfo = await addNewCategorie(boutiks?._id as unknown as string,category_id);
@@ -154,6 +170,7 @@ const addNewCategorieINBoutiks = expressAsyncHandler(
       res
       .status(400)
       .json({ status: "Success", message: "cannot update boutiks!" });
+      return;
     }
 
     res
