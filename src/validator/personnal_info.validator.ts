@@ -3,29 +3,29 @@ import { body } from "express-validator";
 const store_personnal_info_validator = [
   body("firstName")
     .notEmpty()
-    .withMessage("firstname is required!")
+    .withMessage("Le nom est obligatoire.")
     .isString()
-    .withMessage("firstname must be a string")
-    .isLength({ min: 3 })
-    .withMessage("firstname must be between 3 and 30 character long"),
+    .withMessage("Le nom doit être une chaîne de caractères.")
+    .isLength({ min: 3, max: 30 })
+    .withMessage("Le nom doit comporter entre 3 et 30 caractères."),
   body("lastName")
     .notEmpty()
-    .withMessage("lastname is required!")
+    .withMessage("Le prénom est obligatoire.")
     .isString()
-    .withMessage("lastname must be a string")
-    .isLength({ min: 3 })
-    .withMessage("lastname must be between 3 and 30 character long"),
+    .withMessage("Le prénom doit être une chaîne de caractères.")
+    .isLength({ min: 3, max: 30 })
+    .withMessage("Le prénom doit comporter entre 3 et 30 caractères."),
   body("gender")
     .notEmpty()
-    .withMessage("Gender is required!")
+    .withMessage("Le genre est obligatoire.")
     .isString()
-    .withMessage("Gender must be a string"),
-  body("adresse").notEmpty().withMessage("Adresse is required!"),
+    .withMessage("Le genre doit être une chaîne de caractères."),
+  body("adresse").notEmpty().withMessage("L’adresse est obligatoire."),
   body("phoneNumber")
     .notEmpty()
-    .withMessage("Phonenumber is required")
+    .withMessage("Le numéro de téléphone est obligatoire.")
     .matches(/^(?:(\+261)|0)(32|33|34|38|37)\d{7}$/)
-    .withMessage("Please enter a valid phone number"),
+    .withMessage("Veuillez saisir un numéro de téléphone valide."),
  
 ];
 

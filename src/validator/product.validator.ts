@@ -1,19 +1,19 @@
 import { body } from "express-validator";
 
 const product_validator = [
-  body("name").notEmpty().withMessage("Product name is required"),
-  body("description").notEmpty().withMessage("Product description is required"),
-  body("details").notEmpty().withMessage("Prodcut details is required"),
+  body("name").notEmpty().withMessage("Le nom du produit est obligatoire."),
+  body("description").notEmpty().withMessage("La description du produit est obligatoire."),
+  body("details").notEmpty().withMessage("Les détails du produit sont obligatoires."),
   body("price")
     .notEmpty()
-    .withMessage("Product price is required")
+    .withMessage("Le prix du produit est obligatoire.")
     .isNumeric()
-    .withMessage("Product price must be a number"),
-  body("category").notEmpty().withMessage("Product category is required"),
-  body("stock").isNumeric().withMessage("Product stock must be a number")
+    .withMessage("Le prix du produit doit être un nombre."),
+  body("category").notEmpty().withMessage("La catégorie du produit est obligatoire."),
+  body("stock").isNumeric().withMessage("Le stock doit être un nombre.")
 ];
 const variant_validator = [
-    body("name").notEmpty().withMessage("Product variant name is required"),
-    body("values").notEmpty().withMessage("Product variant values is required").isArray().withMessage("Product variant types must be an array"),
+    body("name").notEmpty().withMessage("Le nom de la variante est obligatoire."),
+    body("values").notEmpty().withMessage("Les valeurs de la variante sont obligatoires.").isArray().withMessage("Les valeurs de la variante doivent être fournies sous forme de tableau."),
 ]
 export {product_validator, variant_validator};

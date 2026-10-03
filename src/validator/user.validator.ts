@@ -3,23 +3,23 @@ import { body } from "express-validator";
 const registerValidator = [
   body("username")
     .isString()
-    .withMessage("Username must be a string!")
+    .withMessage("Le nom d’utilisateur doit être une chaîne de caractères.")
     .notEmpty()
-    .withMessage("username is required")
+    .withMessage("Le nom d’utilisateur est obligatoire.")
     .isLength({ min: 3 })
-    .withMessage("username must be between 3 and 30 character long"),
+    .withMessage("Le nom d’utilisateur doit comporter entre 3 et 30 caractères."),
   body("phonenumber")
     .notEmpty()
-    .withMessage("Phonenumber is required")
+    .withMessage("Le numéro de téléphone est obligatoire.")
     .matches(/^(?:(\+261)|0)(32|33|34|38|37)\d{7}$/)
-    .withMessage("Please enter a valid phone number"),
+    .withMessage("Veuillez saisir un numéro de téléphone valide."),
   body("email")
     .isString()
-    .withMessage("Email adresse must be a string")
+    .withMessage("L’adresse e-mail doit être une chaîne de caractères.")
     .notEmpty()
-    .withMessage("email addresse is required")
+    .withMessage("L’adresse e-mail est obligatoire.")
     .isEmail()
-    .withMessage("please enter a valid email")
+    .withMessage("Veuillez saisir une adresse e-mail valide.")
     .normalizeEmail(),
   body("password")
     .isStrongPassword({
@@ -30,7 +30,7 @@ const registerValidator = [
       minSymbols: 1,
     })
     .withMessage(
-      "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one number, and one special character."
+      "Le mot de passe doit comporter au moins 8 caractères et inclure une majuscule, une minuscule, un chiffre et un caractère spécial."
     ),
 ];
 

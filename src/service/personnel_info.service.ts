@@ -14,9 +14,11 @@ import PersonnalInfo from "../model/personnalInfo";
 const create_personnal_info = async (
   data: IPersonalInfo
 ): Promise<IPersonalInfo | null> => {
-  const personnalInfo = await PersonnalInfo.create(data);
-  if (personnalInfo) return personnalInfo;
-  return null;
+  return PersonnalInfo.findOneAndUpdate(
+    { owner_id: data.owner_id },
+    { $set: data },
+    { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
+  ).exec();
 };
 
 
@@ -61,7 +63,7 @@ const get_personnal_info_by_owner_id = async (
 ): Promise<IPersonalInfo | null> => {
   try {
     const personnalInfo = await PersonnalInfo.findOne({ owner_id })
-      .lean<IPersonalInfo>().populate("owner_id")
+      .lean<LeanPersonnalInfo>()
       .exec();
     if (personnalInfo) return personnalInfo;
     return null;
@@ -98,7 +100,11 @@ const search_personnal_info = async (keyword: string) : Promise<IPersonalInfo | 
 
 const completPersonnalInfo = async (id: string, data: IPersonalInfo): Promise<IPersonalInfo | null> => {
   try {
-    const personnalInfo = await PersonnalInfo.findOneAndUpdate({owner_id: id},data,{new: true}).lean<IPersonalInfo>();
+    const personnalInfo = await PersonnalInfo.findOneAndUpdate(
+      { owner_id: id },
+      { $set: data },
+      { new: true, runValidators: true },
+    ).lean<IPersonalInfo>();
     return personnalInfo ? personnalInfo : null;
   } catch (error) {
     throw error;

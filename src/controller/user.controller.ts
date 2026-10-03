@@ -34,18 +34,17 @@ const storeUser = expressAsyncHandler(async (req: Request, res: Response) => {
   if (existingUser) {
     res.status(401).json({
       status: "Failed",
-      message:
-        "Couldn't to create user! email or phonenumber is already taken!",
+        message: "Cette adresse e-mail ou ce numéro de téléphone est déjà utilisé.",
     });
     return;
   }
-  const hashPassword = bcrypt.hashSync(credentials.password, 10);
+  const hashPassword = await bcrypt.hash(credentials.password, 10);
   Object.assign(credentials, { password: hashPassword });
   const user = await createUser(credentials);
   if (!user) {
       res.status(401).json({
       status: "Failed",
-      message: "Couldn't to create user! please try again",
+        message: "Impossible de créer le compte. Veuillez réessayer.",
     });
     return;
   }
@@ -67,7 +66,7 @@ const storeUser = expressAsyncHandler(async (req: Request, res: Response) => {
 
   res.status(201).json({
     status: "Success",
-    message: "User created successfully!",
+     message: "Votre compte a été créé.",
   });
 });
 
@@ -78,13 +77,13 @@ const login = expressAsyncHandler(async (req: Request, res: Response) => {
     password,
   });
   if (!user) {
-    res.status(401).json({ status: "Failed", message: "User does not exist!" });
+    res.status(401).json({ status: "Failed", message: "Identifiants incorrects." });
     return;
   }
 
   const verified = await compare(password, user.password);
   if (!verified) {
-    res.status(412).json({ message: "Mot de passe incorrect!" });
+    res.status(412).json({ message: "Mot de passe incorrect." });
     return;
   }
 
@@ -105,17 +104,15 @@ const login = expressAsyncHandler(async (req: Request, res: Response) => {
     const OTPCode: string = await createEmailOtp(String(user._id));
 
     const data = {
-      title: "Vérification de l'adresse mail!",
+      title: "Vérification de votre adresse e-mail",
       information: "Code de validation: ",
       CODE_OTP: OTPCode,
-      message:
-        "Merci d'avoir inscri(e) chez ShoppingMada! Afin de pourvoir se connecté, veuillez confirmé votre adresse en utilisant le code ci-desous",
-      content:
-        "Cette code ne dure que pendant 10 min àpres la récéption de cette message",
+      message: "Merci de vous être inscrit sur ShopInMada. Pour vous connecter, veuillez confirmer votre adresse e-mail à l’aide du code ci-dessous.",
+      content: "Ce code expire 10 minutes après sa réception.",
     };
 
     try {
-      await sendEmail(data, user.email, "Verification de l'adresse mail");
+      await sendEmail(data, user.email, "Vérification de votre adresse e-mail");
     } catch (error) {
       const mailError = error as NodeJS.ErrnoException & { responseCode?: number };
       console.error("Failed to send email verification code", {
@@ -141,7 +138,7 @@ const login = expressAsyncHandler(async (req: Request, res: Response) => {
     });
     res.status(200).json({
       status: "Verification Failed",
-      message: "Veuillez verifier votre adresse Email",
+        message: "Veuillez vérifier votre adresse e-mail.",
       userInfo: authUser,
     });
     return;
@@ -161,7 +158,7 @@ const login = expressAsyncHandler(async (req: Request, res: Response) => {
 
   res.status(201).json({
     status: "Success",
-    message: "login successfully",
+      message: "Connexion réussie.",
     userInfo: authUser,
   });
 });
@@ -174,7 +171,7 @@ const regenerateToken = expressAsyncHandler(
     if (!updatedUser) {
       res
         .status(405)
-        .json({ status: "Failed", message: "User does not exist!" });
+        .json({ status: "Failed", message: "Utilisateur introuvable." });
       return;
     }
 
@@ -191,7 +188,7 @@ const regenerateToken = expressAsyncHandler(
 
     res.status(201).json({
       status: "Success",
-      message: "token regenerate successfully",
+        message: "La session a été renouvelée.",
       userInfo: authUser,
     });
   },
@@ -202,14 +199,14 @@ const getUserInfo = expressAsyncHandler(async (req: Request, res: Response) => {
     const user = (req as any).user;
     const userInfo = await getUser(user._id);
     if (!user) {
-      res.status(401).json({ status: "Failed", message: "Unauthorized!" });
+      res.status(401).json({ status: "Failed", message: "Authentification requise." });
       return;
     }
 
     if (!userInfo) {
       res
         .status(403)
-        .json({ status: "Failed", message: "User does not exist" });
+        .json({ status: "Failed", message: "Utilisateur introuvable." });
       return;
     }
     const { password: _password, ...safeUser } = userInfo;
@@ -223,28 +220,26 @@ const handleChangePassword = expressAsyncHandler(
   async (req: Request, res: Response) => {
     const email = String(req.body.email ?? "").trim().toLowerCase();
     if (!email) {
-      res.status(400).json({ status: "Failed", message: "Email is required" });
+      res.status(400).json({ status: "Failed", message: "L’adresse e-mail est obligatoire." });
       return;
     }
     const user = await checkExistingUser({ email, phonenumber: "" } as IUser);
     if (!user) {
       res
         .status(400)
-        .json({ status: "Failed", message: "User does not exist!" });
+        .json({ status: "Failed", message: "Utilisateur introuvable." });
       return;
     }
     const OTPCode: string = await createEmailOtp(String(user._id));
     const data = {
-      title: "Vérification de l'adresse mail!",
+      title: "Réinitialisation de votre mot de passe",
       information: "Code de validation: ",
       CODE_OTP: OTPCode,
-      message:
-        "Merci d'avoir inscri(e) chez ShoppingMada! Afin de pourvoir se connecté, veuillez confirmé votre adresse en utilisant le code ci-desous",
-      content:
-        "Cette code ne dure que pendant 10 min àpres la récéption de cette message",
+      message: "Vous avez demandé la réinitialisation de votre mot de passe. Saisissez le code ci-dessous pour vérifier votre adresse e-mail.",
+      content: "Ce code expire 10 minutes après sa réception.",
     };
 
-    await sendEmail(data, user.email, "Verification de l'adresse mail");
+    await sendEmail(data, user.email, "Réinitialisation de votre mot de passe");
     const { password: _password, ...authUser } = user;
     const token = jwt.sign({ ...authUser, tokenPurpose: "password-reset" }, process.env.TOKEN_SECRET as string, { expiresIn: "10m" });
     res.cookie("jwt", token, {
@@ -265,12 +260,12 @@ const handleChangePassword = expressAsyncHandler(
 const logout = expressAsyncHandler(async (req: Request, res: Response) => {
   const user = (req as any).user;
   if (!user) {
-    res.status(401).json({ message: "Unautorized!" });
+    res.status(401).json({ message: "Authentification requise." });
     return;
   }
     res.clearCookie("jwt", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict" });
   res.clearCookie("refreshToken", { httpOnly: true });
-  res.status(200).json({ status: "Success", message: "Logout successfully" });
+  res.status(200).json({ status: "Success", message: "Vous êtes déconnecté." });
 });
 
 const deleteAcount = expressAsyncHandler(
@@ -284,12 +279,12 @@ const deleteAcount = expressAsyncHandler(
     if (!deletedUser) {
       res
         .status(400)
-        .json({ status: "Failed", message: "Cannot delete user!" });
+        .json({ status: "Failed", message: "Impossible de supprimer le compte." });
       return;
     }
     res
       .status(200)
-      .json({ status: "Success", message: "User deleted successfully" });
+      .json({ status: "Success", message: "Le compte a été supprimé." });
   },
 );
 
@@ -299,12 +294,12 @@ const addProfilePicture = expressAsyncHandler(
     const image = (req as any).fileName;
 
     if (!user) {
-      res.status(401).json({ status: "Failed", message: "Unauthorized!" });
+      res.status(401).json({ status: "Failed", message: "Authentification requise." });
       return;
     }
 
     if (!image) {
-      res.status(400).json({ status: "Failed", message: "Image not found!" });
+      res.status(400).json({ status: "Failed", message: "Aucune image n’a été reçue." });
       return;
     }
 
@@ -312,13 +307,13 @@ const addProfilePicture = expressAsyncHandler(
     if (!updatedUser) {
       res
         .status(400)
-        .json({ status: "Failed", message: "Cannot update user!" });
+        .json({ status: "Failed", message: "Impossible de mettre à jour le compte." });
       return;
     }
 
     res.status(200).json({
       status: "Success",
-      message: "Profile picture added successfully",
+      message: "La photo de profil a été ajoutée.",
     });
   },
 );
@@ -334,13 +329,13 @@ const updateUserInfo = expressAsyncHandler(
     if (!updatedUser) {
       res
         .status(400)
-        .json({ status: "Failed", message: "Cannot update user!" });
+        .json({ status: "Failed", message: "Impossible de mettre à jour le compte." });
       return;
     }
 
     res
       .status(200)
-      .json({ status: "Success", message: "User updated successfully" });
+      .json({ status: "Success", message: "Le compte a été mis à jour." });
   },
 );
 const all = expressAsyncHandler(async (req: Request, res: Response) => {
@@ -351,7 +346,7 @@ const all = expressAsyncHandler(async (req: Request, res: Response) => {
   }
   const users = await getAllUser();
   if (!users) {
-    res.status(400).json({ status: "Failed", message: "Cannot update user!" });
+    res.status(400).json({ status: "Failed", message: "Impossible de récupérer les utilisateurs." });
     return;
   }
 
@@ -367,7 +362,7 @@ const findUser = expressAsyncHandler(async (req: Request, res: Response) => {
   }
   const user = await getUser(id);
   if (!user) {
-    res.status(400).json({ status: "Failed", message: "Cannot find user" });
+    res.status(400).json({ status: "Failed", message: "Utilisateur introuvable." });
     return;
   }
   const { password: _password, ...safeUser } = user;
@@ -387,12 +382,12 @@ const blockAccount = expressAsyncHandler(
     if (!user) {
       res
         .status(400)
-        .json({ status: "Failed", message: "Cannot find user in user group" });
+        .json({ status: "Failed", message: "Utilisateur introuvable dans son groupe." });
       return;
     }
     res.status(201).json({
       status: "Success",
-      message: "User account Blocked successfully!",
+        message: "Le compte a été désactivé.",
     });
   },
 );
@@ -406,7 +401,7 @@ const activeAccount = expressAsyncHandler(
     }
     const user = await getUser(id);
     if (!user) {
-      res.status(400).json({ status: "Failed", message: "Cannot find user!" });
+      res.status(400).json({ status: "Failed", message: "Utilisateur introuvable." });
       return;
     }
 
@@ -421,7 +416,7 @@ const activeAccount = expressAsyncHandler(
         if (member) await updateUser(id, { userGroupMember_id: member._id } as IUser);
         res
           .status(201)
-          .json({ status: "Success", message: "User account actived!" });
+          .json({ status: "Success", message: "Le compte a été réactivé." });
         return;
       }
     } else {
@@ -435,10 +430,10 @@ const activeAccount = expressAsyncHandler(
         if (member) await updateUser(id, { userGroupMember_id: member._id } as IUser);
         res
           .status(201)
-          .json({ status: "Success", message: "User account actived!" });
+          .json({ status: "Success", message: "Le compte a été réactivé." });
         return;
       }
-      res.status(400).json({ status: "Failed", message: "Failed" });
+      res.status(400).json({ status: "Failed", message: "Impossible de réactiver le compte." });
     }
   },
 );
@@ -450,10 +445,10 @@ const checkUserAccount = expressAsyncHandler(
       user_id: new Types.ObjectId(id),
     });
     if (!userGroup) {
-      res.status(400).json({ status: "Failed", message: "Account blocked" });
+      res.status(400).json({ status: "Failed", message: "Le compte est désactivé." });
       return;
     }
-    res.status(200).json({ status: "Success", message: "Account actived!" });
+    res.status(200).json({ status: "Success", message: "Le compte est actif." });
   },
 );
 
@@ -465,7 +460,7 @@ const changeUserGroupToAdmin = expressAsyncHandler(
     if (!user || user.userGroupMember_id?.usergroup_id?.name !== "Super Admin") {
       res.status(401).json({
         status: "Failed",
-        message: "Vous devez vous connécté tout d'abord",
+          message: "Vous devez d’abord vous connecter.",
       });
       return;
     }
@@ -478,7 +473,7 @@ const changeUserGroupToAdmin = expressAsyncHandler(
     if (!newUserGroup) {
       res
         .status(403)
-        .json({ status: "Failed", message: "Une erreur est survenu!" });
+        .json({ status: "Failed", message: "Une erreur est survenue." });
       return;
     }
 
@@ -486,7 +481,7 @@ const changeUserGroupToAdmin = expressAsyncHandler(
 
     res
       .status(201)
-      .json({ status: "Success", message: "Modification éffétué avec succès" });
+      .json({ status: "Success", message: "La modification a été effectuée." });
   },
 );
 
@@ -505,7 +500,8 @@ const authVerify = expressAsyncHandler(async (req: Request, res: Response) => {
 
     res.status(200).json({ userInfo: safeUser });
   } catch (err) {
-    res.status(500).json({ message: "Erreur serveur", error: err });
+    console.error("Erreur lors de la vérification de la session :", err);
+    res.status(500).json({ message: "Une erreur interne est survenue." });
   }
 });
 

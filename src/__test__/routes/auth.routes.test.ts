@@ -38,7 +38,7 @@ describe("Users Routes", () => {
                 .send(mockuser)
                 .expect(201);
 
-            expect(res.body.message).toBe("User created successfully!");
+            expect(res.body.message).toBe("Votre compte a été créé.");
             expect(add_user_in_user_group).toHaveBeenCalled(); // Vérifiez que l'ajout a été appelé
         });
     });

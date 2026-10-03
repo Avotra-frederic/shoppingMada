@@ -9,7 +9,7 @@ const auth = expressAsyncHandler(
     if (!token) {
       res.status(401).json({
         status: "Unauthorized",
-        message: "Access denied!",
+        message: "Accès refusé.",
       });
       return;
     }
@@ -17,7 +17,7 @@ const auth = expressAsyncHandler(
     try {
       const secret = process.env.TOKEN_SECRET;
       if (!secret) {
-        res.status(500).json({ status: "Error", message: "Authentication is not configured" });
+        res.status(500).json({ status: "Error", message: "L’authentification n’est pas configurée." });
         return;
       }
       const decodedToken = jwt.verify(token, secret) as JwtPayload;
@@ -27,11 +27,11 @@ const auth = expressAsyncHandler(
           ? ["/email/verify", "/email/new_verification_code"]
           : null;
       if (req.path === "/email/reset-password" && decodedToken.otpVerified !== true) {
-        res.status(403).json({ status: "Unauthorized", message: "Veuillez v�rifier le code re�u par email." });
+        res.status(403).json({ status: "Unauthorized", message: "Veuillez vérifier le code reçu par e-mail." });
         return;
       }
       if (allowedLimitedPaths && !allowedLimitedPaths.includes(req.path)) {
-        res.status(403).json({ status: "Unauthorized", message: "This session cannot access this resource." });
+        res.status(403).json({ status: "Unauthorized", message: "Cette session ne permet pas d’accéder à cette ressource." });
         return;
       }
 
@@ -39,8 +39,8 @@ const auth = expressAsyncHandler(
       (req as any).user = decodedToken;
       next();
     } catch (error) {
-      console.error("Erreur lors de la v�rification du token :", error);
-      res.status(401).json({ status: "Unauthorized", message: "Invalid token!" });
+      console.error("Erreur lors de la vérification du jeton :", error);
+      res.status(401).json({ status: "Unauthorized", message: "Jeton d’authentification invalide." });
     }
   }
 );
@@ -52,7 +52,7 @@ const guest = expressAsyncHandler(
     if (token) {
       res
         .status(402)
-        .json({ status: "Unauthorized", message: "Access denied!" });
+        .json({ status: "Unauthorized", message: "Accès refusé." });
       return;
     }
     next();

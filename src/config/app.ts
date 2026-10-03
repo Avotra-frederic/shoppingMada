@@ -54,7 +54,7 @@ app.get(
       try {
         res.status(201).json({
           status: "Success",
-          message: "thanks to use fullcoding api !",
+          message: "Merci d’utiliser l’API ShopInMada.",
         });
       } catch (error) {
         next(error);
@@ -104,7 +104,7 @@ app.use((req: Request, res: Response) => {
 });
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   if (err.code === "EBADCSRFTOKEN") {
-    res.status(403).json({ status: "Error", message: "Invalid CSRF token" });
+    res.status(403).json({ status: "Error", message: "Jeton de sécurité invalide ou expiré." });
     return;
   }
   if (err.type === "entity.too.large") {
@@ -112,7 +112,7 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     return;
   }
   const status = err.statusCode || err.status || 500;
-  res.status(status).json({ status: "Error", message: status < 500 ? err.message : "Internal Server Error" });
+  res.status(status).json({ status: "Error", message: status < 500 ? err.message : "Une erreur interne est survenue." });
 });
 
 export default app;

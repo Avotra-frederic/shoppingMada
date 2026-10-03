@@ -26,7 +26,7 @@ const storeBoutiksInfo = expressAsyncHandler(
     if ((req as any).fileName) {
       data.logo = (req as any).fileName;
     } else {
-      res.status(400).json({ status: "Failed", message: "Logo is required" });
+      res.status(400).json({ status: "Failed", message: "Le logo de la boutique est obligatoire." });
       return;
     }
 
@@ -34,7 +34,7 @@ const storeBoutiksInfo = expressAsyncHandler(
     if (!createBoutiks) {
       res.status(401).json({
         status: "Failed",
-        message: "Cannot create Boutiks, please try later.",
+        message: "Impossible de créer la boutique. Veuillez réessayer.",
       });
       return;
     }
@@ -45,14 +45,14 @@ const storeBoutiksInfo = expressAsyncHandler(
     if (!updated_user) {
       res
         .status(500)
-        .json({ message: "Cannot update user info please try again later!" });
+        .json({ message: "Impossible de mettre à jour le compte. Veuillez réessayer." });
       return;
     }
     const userGroup = await findUserGroupId("Boutiks");
     if (!userGroup) {
       res.status(400).json({
         status: "Failed",
-        message: "Cannot find user group, please try later.",
+        message: "Le groupe utilisateur est introuvable. Veuillez réessayer.",
       });
       return;
     }
@@ -64,13 +64,13 @@ const storeBoutiksInfo = expressAsyncHandler(
       await delete_boutiks(createBoutiks?._id as unknown as string);
       res.status(402).json({
         status: "Failed",
-        message: "Cannot update user group, please try later.",
+        message: "Impossible de mettre à jour le groupe utilisateur. Veuillez réessayer.",
       });
       return;
     }
     res
       .status(201)
-      .json({ status: "Success", message: "Boutiks created successfully!" });
+      .json({ status: "Success", message: "La boutique a été créée." });
   },
 );
 
@@ -78,7 +78,7 @@ const getBoutiksInfo = expressAsyncHandler(
   async (req: Request, res: Response) => {
     const user = (req as any).user;
     if (!user) {
-      res.status(401).json({ status: "Failed", message: "Unauthorized" });
+      res.status(401).json({ status: "Failed", message: "Authentification requise." });
       return;
     }
 
@@ -86,7 +86,7 @@ const getBoutiksInfo = expressAsyncHandler(
     if (!boutiks) {
       res
         .status(400)
-        .json({ status: "Failed", message: "Cannot find boutiks" });
+        .json({ status: "Failed", message: "Aucune boutique n’a été trouvée." });
       return;
     }
 
@@ -98,7 +98,7 @@ const deleteBoutiks = expressAsyncHandler(
   async (req: Request, res: Response) => {
     const user = (req as any).user;
     if (!user) {
-      res.status(401).json({ status: "Failed", message: "Unauthorized" });
+      res.status(401).json({ status: "Failed", message: "Authentification requise." });
       return;
     }
     const boutiks = await findBoutiks(user._id);
@@ -111,7 +111,7 @@ const deleteBoutiks = expressAsyncHandler(
 
     res
       .status(200)
-      .json({ status: "Success", message: "Boutiks deleted successfully!" });
+      .json({ status: "Success", message: "La boutique a été supprimée." });
   },
 );
 
@@ -119,7 +119,7 @@ const updateBoutiksInfo = expressAsyncHandler(
   async (req: Request, res: Response) => {
     const user = (req as any).user;
     if (!user) {
-      res.status(401).json({ status: "Failed", message: "Unauthorized" });
+      res.status(401).json({ status: "Failed", message: "Authentification requise." });
       return;
     }
     const boutiks = await findBoutiks(user._id);
@@ -137,14 +137,14 @@ const updateBoutiksInfo = expressAsyncHandler(
       await updateBoutiks(boutiks?._id as unknown as string, boutiksinfo);
       res
         .status(200)
-        .json({ status: "Success", message: "Boutiks updated successfully!" });
+        .json({ status: "Success", message: "La boutique a été mise à jour." });
       return;
     }
 
     await updateBoutiks(boutiks?._id as unknown as string, data);
     res
       .status(200)
-      .json({ status: "Success", message: "Boutiks updated successfully!" });
+      .json({ status: "Success", message: "La boutique a été mise à jour." });
   },
 );
 
@@ -153,7 +153,7 @@ const addNewCategorieINBoutiks = expressAsyncHandler(
     const { category_id } = req.body;
     const user = (req as any).user;
     if (!user) {
-      res.status(401).json({ status: "Failed", message: "Unauthorized" });
+      res.status(401).json({ status: "Failed", message: "Authentification requise." });
       return;
     }
     const boutiks = await findBoutiks(user._id);
@@ -169,13 +169,13 @@ const addNewCategorieINBoutiks = expressAsyncHandler(
     if(!newBoutiksInfo){
       res
       .status(400)
-      .json({ status: "Success", message: "cannot update boutiks!" });
+      .json({ status: "Success", message: "Impossible de mettre à jour la boutique." });
       return;
     }
 
     res
     .status(200)
-    .json({ status: "Success", message: "Boutiks updated successfully!" });
+    .json({ status: "Success", message: "La boutique a été mise à jour." });
   },
 );
 

@@ -11,7 +11,7 @@ const verifyOTPCode = expressAsyncHandler(async(req: Request, res:Response)=>{
     const user = (req as any).user;
     const userUpdate = await verifyEmailOtp(String(user._id), String(OTP ?? "").trim());
     if(!userUpdate){
-        res.status(403).json({status:"Failed", message:"Invalid OTP code"});
+        res.status(403).json({status:"Failed", message:"Le code de vérification est invalide ou expiré."});
         return;
     }
 
@@ -34,25 +34,25 @@ const verifyOTPCode = expressAsyncHandler(async(req: Request, res:Response)=>{
         });
     }
 
-    res.status(201).json({status:"Success", message:"Email verified successfully!"});
+    res.status(201).json({status:"Success", message:"Votre adresse e-mail a été vérifiée."});
 });
 
 const getNewOTP = expressAsyncHandler(async (req: Request, res:Response)=>{
     const user = (req as any).user;
     const OTP = await createEmailOtp(String(user._id));
     await sendEmail({
-        title: "V�rification de votre adresse email",
-        message: "Voici votre nouveau code de v�rification.",
+        title: "Vérification de votre adresse e-mail",
+        message: "Voici votre nouveau code de vérification.",
         information: `Code : ${OTP}`,
         content: "Ce code expire dans 10 minutes.",
-    }, user.email, "Votre code de v�rification");
-    res.status(200).json({status:"Success", message:"Un nouveau code a �t� envoy� � votre adresse email."});
+    }, user.email, "Votre code de vérification");
+    res.status(200).json({status:"Success", message:"Un nouveau code a été envoyé à votre adresse e-mail."});
 })
 
 const resetPassword = expressAsyncHandler(async (req: Request, res: Response) => {
     const password = String(req.body.password ?? "");
     if (password.length < 8 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password) || !/[^a-zA-Z0-9]/.test(password)) {
-        res.status(400).json({ status: "Failed", message: "Le mot de passe doit contenir 8 caract�res, une majuscule, une minuscule, un chiffre et un symbole." });
+        res.status(400).json({ status: "Failed", message: "Le mot de passe doit comporter au moins 8 caractères et inclure une majuscule, une minuscule, un chiffre et un caractère spécial." });
         return;
     }
     const user = (req as any).user;
@@ -62,7 +62,7 @@ const resetPassword = expressAsyncHandler(async (req: Request, res: Response) =>
         return;
     }
     res.clearCookie("jwt", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict" });
-    res.status(200).json({ status: "Success", message: "Mot de passe r�initialis� avec succès." });
+    res.status(200).json({ status: "Success", message: "Votre mot de passe a été réinitialisé." });
 });
 
 export {verifyOTPCode, getNewOTP, resetPassword};

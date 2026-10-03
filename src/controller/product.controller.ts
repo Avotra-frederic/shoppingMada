@@ -47,7 +47,7 @@ const storeProduct = expressAsyncHandler(
       if (!product) {
         res.status(400).json({
           status: "Failed",
-          message: "Failed to save product! Please try again",
+          message: "Impossible d’enregistrer le produit. Veuillez réessayer.",
         });
         return;
       }
@@ -82,7 +82,7 @@ const storeProduct = expressAsyncHandler(
           .status(400)
           .json({
             status: "Failed",
-            message: "Failed to update product! Please try again",
+            message: "Impossible de mettre à jour le produit. Veuillez réessayer.",
           });
         return;
       }
@@ -90,7 +90,7 @@ const storeProduct = expressAsyncHandler(
 
     res
       .status(req.method === "POST" ? 201 : 200)
-      .json({ status: "Success", message: "Product save successfully !" });
+      .json({ status: "Success", message: "Le produit a été enregistré." });
   },
 );
 
@@ -128,7 +128,7 @@ const addNewVariant = expressAsyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
     if (!id) {
-      res.status(401).json({ status: "Failed", message: "Unauthorized!" });
+      res.status(401).json({ status: "Failed", message: "Authentification requise." });
       return;
     }
     const existingProduct = await getProductById(id);
@@ -141,14 +141,14 @@ const addNewVariant = expressAsyncHandler(
     if (!variant) {
       res.status(400).json({
         status: "Failed",
-        message: "An error as occured! please try again later",
+        message: "Une erreur est survenue. Veuillez réessayer.",
       });
       return;
     }
 
     res.status(201).json({
       status: "Success",
-      message: "Product variant is added successfully!",
+      message: "La variante du produit a été ajoutée.",
     });
   },
 );
@@ -158,7 +158,7 @@ const deleteBoutiksProduct = expressAsyncHandler(
     const { id } = req.params;
     const user = (req as any).user;
     if (!user) {
-      res.status(401).json({ status: "Failed", message: "Unauthorized" });
+      res.status(401).json({ status: "Failed", message: "Authentification requise." });
       return;
     }
     const existingProduct = await getProductById(id);
@@ -170,7 +170,7 @@ const deleteBoutiksProduct = expressAsyncHandler(
     if (!newProduct) {
       res.status(400).json({
         status: "Failed",
-        message: "An error as occured! please try again later",
+        message: "Une erreur est survenue. Veuillez réessayer.",
       });
       return;
     }
@@ -192,7 +192,7 @@ const deleteBoutiksProduct = expressAsyncHandler(
 
     res.status(201).json({
       status: "Success",
-      message: "Product deleted successfully!",
+      message: "Le produit a été supprimé.",
       data: newProduct,
     });
   },
@@ -203,7 +203,7 @@ const removeVariant = expressAsyncHandler(
     const { id, variant_id, valueName } = req.params;
     const user = (req as any).user;
     if (!user) {
-      res.status(401).json({ status: "Failed", message: "Unauthorized" });
+      res.status(401).json({ status: "Failed", message: "Authentification requise." });
       return;
     }
     const existingProduct = await getProductById(id);
@@ -215,14 +215,14 @@ const removeVariant = expressAsyncHandler(
     if (!product) {
       res.status(400).json({
         status: "Failed",
-        message: "An error as occured! please try again later",
+        message: "Une erreur est survenue. Veuillez réessayer.",
       });
       return;
     }
 
     res.status(201).json({
       status: "Success",
-      message: "Product variant deleted successfully!",
+      message: "La variante du produit a été supprimée.",
       data: product,
     });
   },
@@ -241,14 +241,14 @@ const updateProductVariant = expressAsyncHandler(
     if (!variant) {
       res.status(400).json({
         status: "Failed",
-        message: "An error as occured! please try again later",
+        message: "Une erreur est survenue. Veuillez réessayer.",
       });
       return;
     }
 
     res.status(201).json({
       status: "Success",
-      message: "Product variant is added successfully!",
+      message: "La variante du produit a été mise à jour.",
     });
   },
 );
@@ -269,7 +269,7 @@ const search_product = expressAsyncHandler(
         product =  await searchProduct(q as string, location as string);
       }
       if (!product) {
-        res.status(404).json({ message: "Cannot find a product!" });
+        res.status(404).json({ status: "Failed", message: "Aucun produit trouvé." });
         return;
       }
 

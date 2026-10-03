@@ -36,7 +36,7 @@ const uploadMultiImage = expressAsyncHandler(async(req: Request, res: Response, 
             (req as any).fileNames = (req.files as Express.Multer.File[]).map(file =>file.filename);
             next()
         } else {
-            res.status(400).json({ status: "Failed", message: "No file uploaded" });
+            res.status(400).json({ status: "Failed", message: "Aucun fichier n’a été téléversé." });
         }
     });
 })

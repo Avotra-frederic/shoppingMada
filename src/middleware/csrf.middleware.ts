@@ -11,7 +11,7 @@ const csrfProtection = expressAsyncHandler(async(req: Request, res: Response, ne
     req.method === "DELETE"
   ) {
     if (!secret || !csrf.verify(secret, token)) {
-      res.status(419).json({ status: "Failed", message: "Unauthorized!" });
+      res.status(419).json({ status: "Failed", message: "Jeton de sécurité invalide ou expiré." });
       return;
     }
     next();

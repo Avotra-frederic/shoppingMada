@@ -1,23 +1,23 @@
 import { body } from "express-validator";
 
 const boutiks_store_validator = [
-    body("name").notEmpty().withMessage("name is required"),
-    body("adresse").notEmpty().withMessage("adresse is required"),
+    body("name").notEmpty().withMessage("Le nom de la boutique est obligatoire."),
+    body("adresse").notEmpty().withMessage("L’adresse de la boutique est obligatoire."),
     body("phoneNumber")
       .notEmpty()
-      .withMessage("Phonenumber is required")
+      .withMessage("Le numéro de téléphone est obligatoire.")
       .matches(/^(?:(\+261)|0)(32|33|34|38|37)\d{7}$/)
-      .withMessage("Please enter a valid phone number"),
+      .withMessage("Veuillez saisir un numéro de téléphone valide."),
     body("email")
       .isString()
-      .withMessage("Email adresse must be a string")
+      .withMessage("L’adresse e-mail doit être une chaîne de caractères.")
       .notEmpty()
-      .withMessage("email addresse is required")
+      .withMessage("L’adresse e-mail est obligatoire.")
       .matches(
         /^[a-zA-Z0-9._%+-]+@(gmail|yahoo|outlook|[a-zA-Z]{2,}.*)\.(mg|fr|com|org|io|[a-zA-Z]{2,})$/
       )
-      .withMessage("please enter a valid email"),
-    body("product_category").isArray().withMessage("product_category is required"),
+      .withMessage("Veuillez saisir une adresse e-mail valide."),
+    body("product_category").isArray().withMessage("Au moins une catégorie de produits est obligatoire."),
 ]
 
 export default boutiks_store_validator;
