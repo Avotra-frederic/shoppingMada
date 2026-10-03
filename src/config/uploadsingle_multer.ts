@@ -46,5 +46,24 @@ const uploadProductImages = multer({
     limits: { files: 5, fileSize: 5 * 1024 * 1024 },
 }).array("image", 5);
 
+export const paymentEvidenceDirectory = path.join(__dirname, "../../private/payment-evidence");
+mkdirSync(paymentEvidenceDirectory, { recursive: true });
+const paymentEvidenceStorage = multer.diskStorage({
+    destination: paymentEvidenceDirectory,
+    filename: (_req, file, cb) => {
+        cb(null, `${randomUUID()}${path.extname(file.originalname).toLowerCase()}`);
+    },
+});
+const uploadPaymentEvidence = multer({
+    storage: paymentEvidenceStorage,
+    fileFilter: (req, file, cb) => {
+        const allowed = /\.(jpeg|jpg|png|webp)$/i.test(path.extname(file.originalname)) && /^image\/(jpeg|png|webp)$/.test(file.mimetype);
+        if (allowed) cb(null, true);
+        else cb(new Error("Only JPEG, PNG, and WebP images are allowed"));
+    },
+    limits: { files: 1, fileSize: 5 * 1024 * 1024 },
+}).single("evidence");
+
 export {uploadImage, uploadProductImages};
+export { uploadPaymentEvidence };
 export default upload;
