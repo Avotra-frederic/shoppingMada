@@ -4,8 +4,14 @@ import jwt from "jsonwebtoken";
 
 export const verifyToken = expressAsyncHandler((req: Request, res: Response, next: NextFunction) => {
   const token = req.cookies.jwt;
+  if (!token) {
+    (req as any).user = null;
+    next();
+    return;
+  }
+
   const secret = process.env.TOKEN_SECRET;
-  if (!token || !secret) {
+  if (!secret) {
     res.status(401).json({ message: "Non authentifié" });
     return;
   }

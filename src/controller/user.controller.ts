@@ -486,7 +486,11 @@ const changeUserGroupToAdmin = expressAsyncHandler(
 );
 
 const authVerify = expressAsyncHandler(async (req: Request, res: Response) => {
-  const userId = (req as any).user._id;
+  const userId = (req as any).user?._id;
+  if (!userId) {
+    res.status(200).json({ userInfo: null });
+    return;
+  }
 
   try {
     const user = await getUser(userId);

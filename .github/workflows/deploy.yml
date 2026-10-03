@@ -55,4 +55,9 @@ jobs:
               set -eu
               docker compose pull backend
               docker compose up -d --no-build backend
+              route_status=$(curl --silent --show-error --output /dev/null --write-out "%{http_code}" --retry 20 --retry-connrefused --retry-delay 2 http://127.0.0.1:5100/api/v1/marketplace/orders/payment-methods/not-an-object)
+              if [ "$route_status" != "400" ]; then
+                echo "Marketplace route smoke test failed with HTTP $route_status"
+                exit 1
+              fi
             '
