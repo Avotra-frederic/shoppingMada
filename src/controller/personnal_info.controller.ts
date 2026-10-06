@@ -16,7 +16,7 @@ const store_personnal_info= expressAsyncHandler(async(req: Request, res: Respons
             res.status(401).json({status: "Failed", message:"Impossible d’enregistrer vos informations personnelles."});
             return;
         }
-        const newUser = await updateUser((req as any).user._id,{personnalInfo_id: new Types.ObjectId(personnalInfo._id as string)} as IUser);
+        const newUser = await updateUser(String((req as any).user._id),{personnalInfo_id: new Types.ObjectId(String(personnalInfo._id))} as IUser);
         if(!newUser)
         {
             res.status(400).json({message:"Impossible de mettre à jour le compte. Veuillez réessayer."});
@@ -48,15 +48,19 @@ const getPersonalInfo = expressAsyncHandler(async(req: Request, res:Response)=>{
 const updatePersonnalInfo = expressAsyncHandler(async(req: Request, res:Response)=>{
     const data = req.body;
     const fileNames = (req as any).fileNames ?? [];
+    const cin = String(data.cin ?? "").trim();
+    if (!cin || cin.length > 40 || fileNames.length !== 2) {
+        res.status(400).json({ status: "Failed", message: "Le numéro CIN et les photos du recto et du verso sont obligatoires." });
+        return;
+    }
     const [frontImage, backImage] = fileNames;
-    const newData ={...data, frontImage, backImage}
+    const newData = { cin, frontImage, backImage };
     const updatePersonnalInfo = await completPersonnalInfo((req as any).user._id, newData);
     if(!updatePersonnalInfo){
-        res.status(201).json({status:"Success", data: null});
+        res.status(500).json({status:"Failed", message:"Impossible d’enregistrer la vérification du compte."});
         return;
     };
 
-    
-    res.status(201).json({status:"Success", data: updatePersonnalInfo});
+    res.status(200).json({status:"Success", message:"Vos informations de vérification ont été enregistrées.", data: updatePersonnalInfo});
 })
 export {store_personnal_info, getPersonalInfo, updatePersonnalInfo};

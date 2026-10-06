@@ -98,12 +98,12 @@ const search_personnal_info = async (keyword: string) : Promise<IPersonalInfo | 
   }
 };
 
-const completPersonnalInfo = async (id: string, data: IPersonalInfo): Promise<IPersonalInfo | null> => {
+const completPersonnalInfo = async (id: string, data: Partial<IPersonalInfo>): Promise<IPersonalInfo | null> => {
   try {
     const personnalInfo = await PersonnalInfo.findOneAndUpdate(
       { owner_id: id },
-      { $set: data },
-      { new: true, runValidators: true },
+      { $set: { ...data, owner_id: id } },
+      { new: true, runValidators: true, upsert: true, setDefaultsOnInsert: true },
     ).lean<IPersonalInfo>();
     return personnalInfo ? personnalInfo : null;
   } catch (error) {

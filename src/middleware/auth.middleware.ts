@@ -1,6 +1,8 @@
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { NextFunction, Request, Response } from "express";
 import expressAsyncHandler from "express-async-handler";
+import { Types } from "mongoose";
+import { get_user_group_name } from "../service/user_group_member.service";
 
 const auth = expressAsyncHandler(
   async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -35,7 +37,25 @@ const auth = expressAsyncHandler(
         return;
       }
 
-  
+      if (!allowedLimitedPaths) {
+        const userId = decodedToken._id;
+        if (typeof userId !== "string" && !(userId instanceof Types.ObjectId)) {
+          res.status(401).json({ status: "Unauthorized", message: "Session invalide." });
+          return;
+        }
+        const role = await get_user_group_name({ user_id: new Types.ObjectId(userId) });
+        if (!role) {
+          res.clearCookie("jwt", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            path: "/",
+          });
+          res.status(403).json({ status: "Unauthorized", message: "Ce compte a été désactivé." });
+          return;
+        }
+      }
+
       (req as any).user = decodedToken;
       next();
     } catch (error) {

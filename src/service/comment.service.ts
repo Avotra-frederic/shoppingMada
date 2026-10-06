@@ -1,7 +1,10 @@
 import IComment from "../interface/comment.interface";
 import Comment from "../model/comment.model";
 
-const addComment = async(data: IComment) : Promise<IComment | null> =>{
+type NewComment = Pick<IComment, "comment" | "owner_id" | "product_id"> &
+    Partial<Pick<IComment, "moderationStatus" | "moderationReason">>;
+
+const addComment = async(data: NewComment) : Promise<IComment | null> =>{
     try {
         const comment = await Comment.create(data);
         return comment ? comment : null;
@@ -19,13 +22,36 @@ const deleteComment = async(id: string): Promise<IComment | null> =>{
     }
 }
 
-const getProductComment = async(product_id: string): Promise<IComment | null> =>{
+const findComment = async (id: string): Promise<IComment | null> =>
+    Comment.findById(id).lean<IComment>();
+
+const getCommentsForModeration = async (): Promise<IComment[]> =>
+    Comment.find({})
+        .sort({ createdAt: -1 })
+        .lean<IComment[]>()
+        .populate("owner_id", "username email")
+        .populate("product_id", "name boutiks_id");
+
+const moderateComment = async (
+    id: string,
+    moderationStatus: "Approved" | "Rejected",
+    moderationReason: string,
+    moderatorId: string,
+): Promise<IComment | null> =>
+    Comment.findByIdAndUpdate(id, {
+        moderationStatus,
+        moderationReason,
+        moderatedBy: moderatorId,
+        moderatedAt: new Date(),
+    }, { new: true, runValidators: true }).lean<IComment>();
+
+const getProductComment = async(product_id: string): Promise<IComment[] | null> =>{
     try {
-        const comment  = await Comment.find({product_id: product_id}).lean<IComment>().populate("owner_id");
+        const comment  = await Comment.find({product_id: product_id, moderationStatus: "Approved"}).lean<IComment[]>().populate("owner_id");
         return comment ? comment : null
     } catch (error) {
         throw error
     }
 }
 
-export {addComment, deleteComment, getProductComment}
+export {addComment, deleteComment, getProductComment, findComment, getCommentsForModeration, moderateComment}

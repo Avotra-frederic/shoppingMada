@@ -1,4 +1,4 @@
-import { Document, Types } from "mongoose";
+﻿import { Document, Types } from "mongoose";
 
 export const MARKET_ORDER_STATUSES = [
   "en_attente_vendeur",
@@ -36,6 +36,7 @@ export interface IOrderItemSnapshot {
 export interface IStockReservation {
   product_id: Types.ObjectId;
   quantity: number;
+  stockPath?: string;
 }
 
 export interface IMarketplaceSubOrder {
@@ -95,3 +96,4 @@ export default interface IMarketplaceOrder extends Document {
   createdAt: Date;
   updatedAt: Date;
 }
+

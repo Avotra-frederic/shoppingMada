@@ -19,7 +19,7 @@ Les routes applicatives sont préfixées par `/api/v1`. Les images envoyées son
 
 ## Prérequis
 
-- Node.js et Corepack/Yarn (version déclarée : Yarn 4.5.3).
+- Node.js 22 ou supérieur et npm.
 - Une instance MongoDB accessible.
 - Un serveur SMTP pour les fonctions d'e-mail.
 
@@ -29,8 +29,8 @@ Depuis le dossier `backend` :
 
 ```powershell
 Copy-Item .env.example .env
-corepack yarn install
-corepack yarn dev
+npm install
+npm run dev
 ```
 
 Par défaut, le serveur démarre sur `http://localhost:3000`. Le point d'entrée de santé/racine est `GET /api/v1`.
@@ -53,11 +53,11 @@ Pour Gmail, utilisez un mot de passe d'application et activez la validation en d
 
 ## Scripts
 
-| Commande              | Description                                |
-| --------------------- | ------------------------------------------ |
-| `corepack yarn dev`   | Développement avec redémarrage automatique |
-| `corepack yarn build` | Compilation TypeScript dans `build/`       |
-| `corepack yarn start` | Démarrage du build compilé                 |
+| Commande        | Description                                |
+| --------------- | ------------------------------------------ |
+| `npm run dev`   | Développement avec redémarrage automatique |
+| `npm run build` | Compilation TypeScript dans `build/`       |
+| `npm start`     | Démarrage du build compilé                 |
 
 ## Tests
 

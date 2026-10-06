@@ -100,4 +100,27 @@ const sendEmail = async(data: any, to: string,subject:string)=>{
       await emailSender(mailOption);
   }
 
+export const sendContactEmail = async (
+  name: string,
+  email: string,
+  subject: string,
+  message: string,
+) => {
+  const recipient = process.env.CONTACT_EMAIL?.trim() || process.env.EMAIL_USER?.trim();
+  if (!recipient) throw new Error("Contact email recipient is not configured.");
+
+  const escapedName = Handlebars.escapeExpression(name);
+  const escapedEmail = Handlebars.escapeExpression(email);
+  const escapedSubject = Handlebars.escapeExpression(subject);
+  const escapedMessage = Handlebars.escapeExpression(message).replace(/\r?\n/g, "<br>");
+  await emailSender({
+    from: process.env.EMAIL_USER,
+    to: recipient,
+    replyTo: email,
+    subject: `ShopInMada · ${subject}`,
+    text: `De: ${name} <${email}>\nSujet: ${subject}\n\n${message}`,
+    html: `<h2>${escapedSubject}</h2><p><strong>De :</strong> ${escapedName} &lt;${escapedEmail}&gt;</p><p>${escapedMessage}</p>`,
+  });
+};
+
 export default sendEmail;

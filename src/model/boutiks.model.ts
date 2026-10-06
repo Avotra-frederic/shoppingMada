@@ -23,6 +23,17 @@ const BoutiksSheme = new Schema({
     ville:{
         type:String
     },
+    description: {
+        type: String,
+        trim: true,
+        maxlength: 1000,
+    },
+    websiteUrl: { type: String, trim: true },
+    facebookUrl: { type: String, trim: true },
+    instagramUrl: { type: String, trim: true },
+    tiktokUrl: { type: String, trim: true },
+    youtubeUrl: { type: String, trim: true },
+    isActive: { type: Boolean, default: true, index: true },
     issuer: {
         type:String
     },

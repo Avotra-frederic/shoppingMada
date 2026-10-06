@@ -1,10 +1,10 @@
-import { Document, Schema } from 'mongoose';
+import { Document, Types } from 'mongoose';
 import IUser from './user.interface';
 
 
 export default interface ISubscription extends Document{
-    _id:string | Schema.Types.ObjectId
-    owner_id: string | Schema.Types.ObjectId | IUser
+    _id: Types.ObjectId
+    owner_id: string | Types.ObjectId | IUser
     plan:string
     transactionPhoneNumber:string,
     refTransaction:string
@@ -13,4 +13,10 @@ export default interface ISubscription extends Document{
     startDate: Date,
     endDate : Date
     motif?: string
+    paymentMethodId?: string;
+    paymentMethodName?: string;
+    paymentAccountName?: string;
+    paymentAccountNumber?: string;
+    paymentInstructions?: string;
+    priceMGA?: number;
 }

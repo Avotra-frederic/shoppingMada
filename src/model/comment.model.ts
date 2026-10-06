@@ -19,7 +19,16 @@ const commentScheme = new Schema({
     date:{
         type:Date,
         default: new Date()
-    }
+    },
+    moderationStatus: {
+        type: String,
+        enum: ["Pending", "Approved", "Rejected"],
+        default: "Pending",
+        index: true,
+    },
+    moderationReason: { type: String, maxlength: 500 },
+    moderatedBy: { type: Schema.Types.ObjectId, ref: "User" },
+    moderatedAt: { type: Date },
 },{timestamps: true})
 
 const Comment = models.Comment || model<IComment>("Comment", commentScheme);

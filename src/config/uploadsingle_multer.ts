@@ -33,8 +33,8 @@ const uploadImage = multer({
         if (valid) cb(null, true);
         else cb(new Error("Only JPEG, PNG, and WebP images are allowed"));
     },
-    limits: { files: 10, fileSize: 5 * 1024 * 1024 },
-}).array("image",10);
+    limits: { files: 2, fileSize: 5 * 1024 * 1024 },
+}).array("image",2);
 
 const uploadProductImages = multer({
     storage,

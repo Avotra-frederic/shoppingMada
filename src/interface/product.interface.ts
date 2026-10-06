@@ -1,7 +1,7 @@
 import { Document, Types } from "mongoose";
 
 export default interface IProduct extends Document{
-    _id: Types.ObjectId | string,
+    _id: Types.ObjectId,
     name: string,
     description: string,
     details: string,
@@ -16,5 +16,9 @@ export default interface IProduct extends Document{
     }>;
     owner_id: any,
     boutiks_id: any,
-    metadata?:any
+    metadata?:any,
+    publicationStatus?: "Pending" | "Approved" | "Rejected",
+    moderationReason?: string,
+    moderatedBy?: Types.ObjectId | string,
+    moderatedAt?: Date
 }

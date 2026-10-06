@@ -17,6 +17,7 @@ const reservationSchema = new Schema(
   {
     product_id: { type: Types.ObjectId, ref: "Product", required: true },
     quantity: { type: Number, required: true, min: 1 },
+    stockPath: { type: String },
   },
   { _id: false },
 );

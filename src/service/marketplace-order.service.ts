@@ -1,4 +1,4 @@
-import { Types } from "mongoose";
+﻿import { Types } from "mongoose";
 import IMarketplaceOrder, {
   IMarketplaceSubOrder,
   MarketplaceOrderStatus,
@@ -38,36 +38,93 @@ const deriveGlobalStatus = (subOrders: IMarketplaceSubOrder[]): MarketplaceOrder
   return active[0] ?? "partiellement_terminee";
 };
 
-const rollbackReservations = async (reservations: Array<{ product_id: Types.ObjectId; quantity: number }>) => {
+const rollbackReservations = async (
+  reservations: Array<{ product_id: Types.ObjectId; quantity: number; stockPath?: string }>,
+) => {
   for (const reservation of reservations) {
     await Product.updateOne(
       { _id: reservation.product_id },
-      { $inc: { stock: reservation.quantity } },
+      { $inc: { [reservation.stockPath ?? "stock"]: reservation.quantity } },
     );
   }
 };
-
 const reserveSubOrderStock = async (subOrder: IMarketplaceSubOrder) => {
-  const quantities = new Map<string, number>();
+const quantities = new Map<
+    string,
+    { quantity: number; variants: Record<string, string> }
+  >();
   for (const item of subOrder.items) {
-    const id = String(item.product_id);
-    quantities.set(id, (quantities.get(id) ?? 0) + item.quantity);
+    const productId = String(item.product_id);
+    const variants = item.variants ?? {};
+    const variantKey = JSON.stringify(
+      Object.entries(variants).sort(([left], [right]) =>
+        left.localeCompare(right),
+      ),
+    );
+    const key = `${productId}:${variantKey}`;
+    const existing = quantities.get(key);
+    quantities.set(key, {
+      quantity: (existing?.quantity ?? 0) + item.quantity,
+      variants,
+    });
   }
 
-  const reservations: Array<{ product_id: Types.ObjectId; quantity: number }> = [];
+  const reservations: Array<{
+    product_id: Types.ObjectId;
+    quantity: number;
+    stockPath?: string;
+  }> = [];
   try {
-    for (const [productId, quantity] of quantities) {
-      const product = await Product.findById(productId).select("stock").lean<any>();
+    for (const [key, requested] of quantities) {
+      const productId = key.slice(0, key.indexOf(":"));
+      const quantity = requested.quantity;
+      const product = await Product.findById(productId)
+        .select("stock variant")
+        .lean<any>();
       if (!product) throw new Error("Un produit de la commande n’est plus disponible.");
-      if (typeof product.stock !== "number") continue;
+      const selections = Object.entries(requested.variants);
 
-      const reserved = await Product.findOneAndUpdate(
-        { _id: productId, stock: { $gte: quantity } },
-        { $inc: { stock: -quantity } },
-        { new: true },
-      ).select("_id").lean();
-      if (!reserved) throw new Error("Stock insuffisant pour un ou plusieurs produits.");
-      reservations.push({ product_id: new Types.ObjectId(productId), quantity });
+      if (selections.length) {
+        if (!Array.isArray(product.variant)) throw new Error("Les options de produit ne sont plus disponibles.");
+        for (const [name, value] of selections) {
+          const variantIndex = product.variant.findIndex(
+            (entry: any) => entry.name === name,
+          );
+          const variant = product.variant[variantIndex];
+          const optionIndex =
+            variant?.values?.findIndex((entry: any) => entry.value === value) ??
+            -1;
+          if (!variant || optionIndex < 0) throw new Error("Une option de produit n’est plus disponible.");
+          if (typeof variant.values[optionIndex].stock !== "number") {
+            throw new Error("Le stock de cette option n’est pas défini.");
+          }
+
+          const stockPath = `variant.${variantIndex}.values.${optionIndex}.stock`;
+          const reserved = await Product.findOneAndUpdate(
+            { _id: productId, [stockPath]: { $gte: quantity } },
+            { $inc: { [stockPath]: -quantity } },
+            { new: true },
+          )
+            .select("_id")
+            .lean();
+          if (!reserved) throw new Error("Stock insuffisant pour une option du panier.");
+          reservations.push({
+            product_id: new Types.ObjectId(productId),
+            quantity,
+            stockPath,
+          });
+        }
+      } else if (typeof product.stock === "number") {
+        const reserved = await Product.findOneAndUpdate(
+          { _id: productId, stock: { $gte: quantity } },
+          { $inc: { stock: -quantity } },
+          { new: true },
+        )
+          .select("_id")
+          .lean();
+        if (!reserved) throw new Error("Stock insuffisant pour un ou plusieurs produits.");
+        reservations.push({ product_id: new Types.ObjectId(productId), quantity });
+      }
     }
     return reservations;
   } catch (error) {
@@ -75,11 +132,14 @@ const reserveSubOrderStock = async (subOrder: IMarketplaceSubOrder) => {
     throw error;
   }
 };
-
 const createMarketplaceOrder = async (
   data: Partial<IMarketplaceOrder> & { subOrders: IMarketplaceSubOrder[] },
 ): Promise<IMarketplaceOrder> => {
-  const reservations: Array<{ product_id: Types.ObjectId; quantity: number }> = [];
+  const reservations: Array<{
+    product_id: Types.ObjectId;
+    quantity: number;
+    stockPath?: string;
+  }> = [];
   try {
     for (const subOrder of data.subOrders) {
       subOrder.reservations = await reserveSubOrderStock(subOrder);
@@ -200,3 +260,7 @@ export {
   releaseSubOrderStock,
   updateSubOrder,
 };
+
+
+
+

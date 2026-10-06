@@ -32,11 +32,12 @@ const upload_single_image = expressAsyncHandler(async(req: Request, res: Respons
 const uploadMultiImage = expressAsyncHandler(async(req: Request, res: Response, next: NextFunction) => {
     uploadImage(req, res, async(err : any)=>{
         if (err) return next(err);
-        if(req.files){
-            (req as any).fileNames = (req.files as Express.Multer.File[]).map(file =>file.filename);
+        const files = req.files as Express.Multer.File[] | undefined;
+        if(files?.length === 2){
+            (req as any).fileNames = files.map(file =>file.filename);
             next()
         } else {
-            res.status(400).json({ status: "Failed", message: "Aucun fichier n’a été téléversé." });
+            res.status(400).json({ status: "Failed", message: "Les photos du recto et du verso sont obligatoires." });
         }
     });
 })

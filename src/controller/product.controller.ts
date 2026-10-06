@@ -13,6 +13,9 @@ import {
   updateVariant,
   updateProduct,
   searchProduct,
+  getProductsForModeration,
+  moderateProduct,
+  submitProductForReview,
 } from "../service/product.service";
 import path from "path";
 import fs from "fs";
@@ -38,10 +41,18 @@ const storeProduct = expressAsyncHandler(
     }
     if (req.method === "POST") {
       const newData = {
-        ...data,
+        name: String(data.name ?? "").trim(),
+        description: String(data.description ?? "").trim(),
+        details: xss(String(data.details ?? "")),
+        price: Number(data.price),
+        stock: Number(data.stock),
+        category: String(data.category ?? ""),
+        variant: Array.isArray(data.variant) ? data.variant : [],
         owner_id: (req as any).user._id,
         photos: fileNames,
         boutiks_id: boutiks?._id,
+        publicationStatus: "Pending",
+        moderationReason: "",
       };
       const product = await create_product(newData as IProduct);
       if (!product) {
@@ -70,6 +81,8 @@ const storeProduct = expressAsyncHandler(
         stock: Number(data.stock),
         category: String(data.category ?? ""),
         photos: [...retainedPhotos, ...fileNames].slice(0, 5),
+        publicationStatus: "Pending",
+        moderationReason: "",
       };
       const existingProduct = await getProductById(id);
       if (!existingProduct || String(existingProduct.owner_id) !== String((req as any).user._id)) {
@@ -90,7 +103,7 @@ const storeProduct = expressAsyncHandler(
 
     res
       .status(req.method === "POST" ? 201 : 200)
-      .json({ status: "Success", message: "Le produit a été enregistré." });
+      .json({ status: "Success", message: "Produit enregistré et envoyé pour approbation." });
   },
 );
 
@@ -110,6 +123,13 @@ const getProduct = expressAsyncHandler(async (req: Request, res: Response) => {
       res.status(404).json({ status: "Failed", message: "Produit introuvable." });
       return;
     }
+    const isOwner = user && String(product.owner_id) === String(user._id);
+    const isAdmin = user?.userGroupMember_id?.usergroup_id?.name === "Super Admin";
+    const shopActive = (product.boutiks_id as any)?.isActive !== false;
+    if ((product.publicationStatus !== "Approved" || !shopActive) && !isOwner && !isAdmin) {
+      res.status(404).json({ status: "Failed", message: "Produit introuvable." });
+      return;
+    }
     res.status(200).json({ status: "Success", data: product });
     return;
   }
@@ -122,6 +142,39 @@ const getProduct = expressAsyncHandler(async (req: Request, res: Response) => {
 
   const product = await getAllProduct();
   res.status(200).json({ status: "Success", data: product });
+});
+
+const listProductsForModeration = expressAsyncHandler(async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  if (user?.userGroupMember_id?.usergroup_id?.name !== "Super Admin") {
+    res.status(403).json({ status: "Failed", message: "Accès réservé au Super Admin." });
+    return;
+  }
+  res.status(200).json({ status: "Success", data: await getProductsForModeration() });
+});
+
+const moderateProductPublication = expressAsyncHandler(async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  if (user?.userGroupMember_id?.usergroup_id?.name !== "Super Admin") {
+    res.status(403).json({ status: "Failed", message: "Accès réservé au Super Admin." });
+    return;
+  }
+  const { publicationStatus, moderationReason } = req.body;
+  if (!["Approved", "Rejected"].includes(publicationStatus)) {
+    res.status(400).json({ status: "Failed", message: "Décision de modération invalide." });
+    return;
+  }
+  const reason = typeof moderationReason === "string" ? moderationReason.trim().slice(0, 500) : "";
+  if (publicationStatus === "Rejected" && !reason) {
+    res.status(400).json({ status: "Failed", message: "Un motif est requis pour refuser une publication." });
+    return;
+  }
+  const product = await moderateProduct(req.params.id, publicationStatus, reason, String(user._id));
+  if (!product) {
+    res.status(404).json({ status: "Failed", message: "Produit introuvable." });
+    return;
+  }
+  res.status(200).json({ status: "Success", message: publicationStatus === "Approved" ? "Produit approuvé et publié." : "Produit refusé.", data: product });
 });
 
 const addNewVariant = expressAsyncHandler(
@@ -145,6 +198,7 @@ const addNewVariant = expressAsyncHandler(
       });
       return;
     }
+    await submitProductForReview(id);
 
     res.status(201).json({
       status: "Success",
@@ -219,6 +273,7 @@ const removeVariant = expressAsyncHandler(
       });
       return;
     }
+    await submitProductForReview(id);
 
     res.status(201).json({
       status: "Success",
@@ -245,6 +300,7 @@ const updateProductVariant = expressAsyncHandler(
       });
       return;
     }
+    await submitProductForReview(id);
 
     res.status(201).json({
       status: "Success",
@@ -283,6 +339,8 @@ const search_product = expressAsyncHandler(
 export {
   storeProduct,
   getProduct,
+  listProductsForModeration,
+  moderateProductPublication,
   addNewVariant,
   deleteBoutiksProduct,
   removeVariant,

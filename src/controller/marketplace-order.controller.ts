@@ -182,7 +182,12 @@ const createOrder = expressAsyncHandler(async (req: Request, res: Response) => {
       return;
     }
     const product = await getProductById(productId);
-    if (!product || (user && String(product.owner_id) === String(user._id))) {
+    if (
+      !product ||
+      product.publicationStatus !== "Approved" ||
+      (product.boutiks_id as any)?.isActive === false ||
+      (user && String(product.owner_id) === String(user._id))
+    ) {
       res.status(404).json({ status: "Failed", message: "Un produit du panier est introuvable." });
       return;
     }

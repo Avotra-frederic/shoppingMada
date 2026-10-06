@@ -4,23 +4,18 @@ import IPersonalInfo from "../interface/personnal_info.interface";
 const personalInfoSheme = new Schema<IPersonalInfo>({
     firstName:{
         type: String,
-        required: true,
     },
     lastName:{
         type: String,
-        required:true,
     },
     phoneNumber:{
-        type:String,
-        required:true
+        type:String
     },
     gender:{
-        type: String,
-        required:true
+        type: String
     },
     adresse:{
-        type: String,
-        required:true
+        type: String
     },
     cin:{
         type: String

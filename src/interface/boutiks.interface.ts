@@ -14,4 +14,11 @@ export default interface IBoutiks extends Document
     plan:string;
     ville:string;
     subscription_id:Types.ObjectId
+    description?: string;
+    websiteUrl?: string;
+    facebookUrl?: string;
+    instagramUrl?: string;
+    tiktokUrl?: string;
+    youtubeUrl?: string;
+    isActive?: boolean;
 }

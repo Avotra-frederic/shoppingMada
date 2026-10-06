@@ -22,6 +22,7 @@ import {
   get_user_group_name,
 } from "../service/user_group_member.service";
 import sendEmail from "../helpers/mail";
+import { updateBoutiks } from "../service/boutiks.service";
 
 const storeUser = expressAsyncHandler(async (req: Request, res: Response) => {
   const credentials = {
@@ -60,7 +61,7 @@ const storeUser = expressAsyncHandler(async (req: Request, res: Response) => {
     addUserIntoUserGroup as IUserGroupMember,
   )) as IUserGroupMember;
   await updateUser(
-    user._id as string,
+    String(user._id),
     { userGroupMember_id: usermember._id } as IUser,
   );
 
@@ -218,6 +219,7 @@ const getUserInfo = expressAsyncHandler(async (req: Request, res: Response) => {
 
 const handleChangePassword = expressAsyncHandler(
   async (req: Request, res: Response) => {
+    const genericMessage = "Si un compte correspond à cette adresse, un code de vérification va être envoyé.";
     const email = String(req.body.email ?? "").trim().toLowerCase();
     if (!email) {
       res.status(400).json({ status: "Failed", message: "L’adresse e-mail est obligatoire." });
@@ -225,9 +227,7 @@ const handleChangePassword = expressAsyncHandler(
     }
     const user = await checkExistingUser({ email, phonenumber: "" } as IUser);
     if (!user) {
-      res
-        .status(400)
-        .json({ status: "Failed", message: "Utilisateur introuvable." });
+      res.status(201).json({ status: "Success", message: genericMessage });
       return;
     }
     const OTPCode: string = await createEmailOtp(String(user._id));
@@ -239,7 +239,17 @@ const handleChangePassword = expressAsyncHandler(
       content: "Ce code expire 10 minutes après sa réception.",
     };
 
-    await sendEmail(data, user.email, "Réinitialisation de votre mot de passe");
+    try {
+      await sendEmail(data, user.email, "Réinitialisation de votre mot de passe");
+    } catch (error) {
+      const mailError = error as NodeJS.ErrnoException & { responseCode?: number };
+      console.error("Failed to send password reset code", {
+        code: mailError.code,
+        responseCode: mailError.responseCode,
+      });
+      res.status(201).json({ status: "Success", message: genericMessage });
+      return;
+    }
     const { password: _password, ...authUser } = user;
     const token = jwt.sign({ ...authUser, tokenPurpose: "password-reset" }, process.env.TOKEN_SECRET as string, { expiresIn: "10m" });
     res.cookie("jwt", token, {
@@ -251,8 +261,7 @@ const handleChangePassword = expressAsyncHandler(
 
     res.status(201).json({
       status: "Success",
-      message: "Code de vérification envoyé",
-      userInfo: authUser,
+      message: genericMessage,
     });
   },
 );
@@ -372,14 +381,37 @@ const findUser = expressAsyncHandler(async (req: Request, res: Response) => {
 const blockAccount = expressAsyncHandler(
   async (req: Request, res: Response) => {
     const { id } = req.params;
-    if ((req as any).user?.userGroupMember_id?.usergroup_id?.name !== "Super Admin") {
+    const requester = (req as any).user;
+    if (requester?.userGroupMember_id?.usergroup_id?.name !== "Super Admin") {
       res.status(403).json({ status: "Failed", message: "Accès réservé à l'administration" });
       return;
     }
-    const user = await delete_user_in_user_group({
+    const target = await getUser(id);
+    if (!target) {
+      res.status(404).json({ status: "Failed", message: "Utilisateur introuvable." });
+      return;
+    }
+    if (String(target._id) === String(requester._id)) {
+      res.status(400).json({ status: "Failed", message: "Vous ne pouvez pas désactiver votre propre compte." });
+      return;
+    }
+    if ((target as any).userGroupMember_id?.usergroup_id?.name === "Super Admin") {
+      res.status(403).json({ status: "Failed", message: "Un compte Super Admin ne peut pas être désactivé depuis cette action." });
+      return;
+    }
+    const shopId = (target as any).boutiks_id?._id ?? (target as any).boutiks_id;
+    if (shopId) {
+      const updatedShop = await updateBoutiks(String(shopId), { isActive: false });
+      if (!updatedShop) {
+        res.status(500).json({ status: "Failed", message: "Impossible de désactiver la boutique associée." });
+        return;
+      }
+    }
+    const membership = await delete_user_in_user_group({
       user_id: new Types.ObjectId(id),
     });
-    if (!user) {
+    if (!membership) {
+      if (shopId) await updateBoutiks(String(shopId), { isActive: true });
       res
         .status(400)
         .json({ status: "Failed", message: "Utilisateur introuvable dans son groupe." });
@@ -414,6 +446,16 @@ const activeAccount = expressAsyncHandler(
         };
         const member = await add_user_in_user_group(addUserIntoUserGroup as IUserGroupMember);
         if (member) await updateUser(id, { userGroupMember_id: member._id } as IUser);
+        if (member) {
+          const shopId = (user.boutiks_id as any)?._id ?? user.boutiks_id;
+          if (shopId) {
+            const updatedShop = await updateBoutiks(String(shopId), { isActive: true });
+            if (!updatedShop) {
+              res.status(500).json({ status: "Failed", message: "Le compte a été réactivé, mais la boutique n’a pas pu être rendue visible." });
+              return;
+            }
+          }
+        }
         res
           .status(201)
           .json({ status: "Success", message: "Le compte a été réactivé." });
@@ -440,6 +482,11 @@ const activeAccount = expressAsyncHandler(
 
 const checkUserAccount = expressAsyncHandler(
   async (req: Request, res: Response) => {
+    const requester = (req as any).user;
+    if (requester?.userGroupMember_id?.usergroup_id?.name !== "Super Admin") {
+      res.status(403).json({ status: "Failed", message: "Accès réservé au Super Admin." });
+      return;
+    }
     const { id } = req.params;
     const userGroup = await get_user_group_name({
       user_id: new Types.ObjectId(id),

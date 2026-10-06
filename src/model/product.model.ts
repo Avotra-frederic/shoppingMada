@@ -73,6 +73,15 @@ const ProductScheme = new Schema<IProduct>(
     metadata: {
       type: Schema.Types.Mixed,
     },
+    publicationStatus: {
+      type: String,
+      enum: ["Pending", "Approved", "Rejected"],
+      default: "Pending",
+      index: true,
+    },
+    moderationReason: { type: String, maxlength: 500 },
+    moderatedBy: { type: Types.ObjectId, ref: "User" },
+    moderatedAt: { type: Date },
   },
   { timestamps: true },
 );

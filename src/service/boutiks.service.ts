@@ -19,7 +19,7 @@ const delete_boutiks = async(id: string): Promise<IBoutiks | null> => {
     }
 }
 
-const updateBoutiks= async(id: string, data: IBoutiks): Promise<IBoutiks | null> => {
+const updateBoutiks= async(id: string, data: Partial<IBoutiks>): Promise<IBoutiks | null> => {
     try {
         const updateQuery = (data as any).$push
       ? { $push: (data as any).$push }
@@ -41,4 +41,10 @@ const findBoutiks = async(owner_id: string): Promise<IBoutiks | null> =>{
     const boutiks = await Boutiks.findOne({owner_id: owner_id}).lean<IBoutiks>().populate("subscription_id");
     return boutiks || null;
 }
-export {create_boutiks,delete_boutiks, updateBoutiks, findBoutiks, addNewCategorie};
+
+const getActiveBoutikIds = async (): Promise<string[]> => {
+    const ids = await Boutiks.find({ isActive: { $ne: false } }).distinct("_id");
+    return ids.map((id) => String(id));
+}
+
+export {create_boutiks,delete_boutiks, updateBoutiks, findBoutiks, addNewCategorie, getActiveBoutikIds};

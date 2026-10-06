@@ -2,11 +2,11 @@ import { Document, Types } from "mongoose";
 
 export default interface IPersonalInfo extends Document
 {
-    firstName: string;
-    lastName: string;
-    adresse:string;
-    gender:string;
-    phoneNumber:String;
+    firstName?: string;
+    lastName?: string;
+    adresse?:string;
+    gender?:string;
+    phoneNumber?:string;
     cin?:string;
     owner_id?: Types.ObjectId | string;
     frontImage?: string;

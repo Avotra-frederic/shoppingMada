@@ -20,6 +20,12 @@ const SubscriptionSheme = new Schema<ISubscription>({
     selectedPhoneNumber:{
         type:String
     },
+    paymentMethodId: { type: String },
+    paymentMethodName: { type: String },
+    paymentAccountName: { type: String },
+    paymentAccountNumber: { type: String },
+    paymentInstructions: { type: String },
+    priceMGA: { type: Number, min: 0 },
     startDate:{
         type: Date
     },

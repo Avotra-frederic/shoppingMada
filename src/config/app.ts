@@ -19,6 +19,7 @@ import command_routes from "../routers/command.routes";
 import userRouter from "../routers/user.routes";
 import subscriptionRoute from "../routers/subscription.routes";
 import marketplaceOrderRoutes from "../routers/marketplace-order.routes";
+import contactRoutes from "../routers/contact.routes";
 const csrf = new CSRF();
 const corsOption: cors.CorsOptions = {
   origin: process.env.ALLOWED_ORIGIN as string,
@@ -101,6 +102,7 @@ app.use("/api/v1", commentRoutes);
 app.use("/api/v1", command_routes);
 app.use("/api/v1", marketplaceOrderRoutes);
 app.use("/api/v1", subscriptionRoute);
+app.use("/api/v1", contactRoutes);
 app.use((req: Request, res: Response) => {
   res.status(404).json({ status: "Error", message: `Route introuvable: ${req.method} ${req.path}` });
 });
