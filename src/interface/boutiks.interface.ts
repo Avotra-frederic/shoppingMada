@@ -5,6 +5,7 @@ export default interface IBoutiks extends Document
     _id: Types.ObjectId;
     name:string,
     phoneNumber: string,
+    whatsappNumber?: string;
     email: string,
     owner_id: Types.ObjectId | string,
     logo: string,

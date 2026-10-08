@@ -11,6 +11,8 @@ import {
   declarePayment,
   getOrderForTracking,
   getPaymentEvidence,
+  downloadSubOrderInvoice,
+  issueSubOrderInvoice,
   getPublicPaymentMethods,
   getSellerPaymentMethods,
   getSellerOrderSummary,
@@ -25,6 +27,8 @@ const marketplaceOrderRoutes = Router();
 marketplaceOrderRoutes.get("/marketplace/orders/payment-methods/:shopId", getPublicPaymentMethods);
 marketplaceOrderRoutes.get("/marketplace/orders/track/:orderId", optionalAuth, getOrderForTracking);
 marketplaceOrderRoutes.get("/marketplace/orders/:orderId/suborders/:subOrderId/evidence", optionalAuth, getPaymentEvidence);
+marketplaceOrderRoutes.get("/marketplace/orders/:orderId/suborders/:subOrderId/invoice", optionalAuth, downloadSubOrderInvoice);
+marketplaceOrderRoutes.post("/marketplace/orders/:orderId/suborders/:subOrderId/invoice", auth, issueSubOrderInvoice);
 marketplaceOrderRoutes.get("/marketplace/orders/seller/payment-methods", auth, getSellerPaymentMethods);
 marketplaceOrderRoutes.get("/marketplace/orders/seller/summary", auth, getSellerOrderSummary);
 marketplaceOrderRoutes.put("/marketplace/orders/seller/payment-methods", auth, configurePaymentMethods);

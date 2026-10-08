@@ -133,6 +133,7 @@ const updateBoutiksInfo = expressAsyncHandler(
       "name",
       "adresse",
       "phoneNumber",
+      "whatsappNumber",
       "email",
       "ville",
       "description",
@@ -151,6 +152,11 @@ const updateBoutiksInfo = expressAsyncHandler(
         return;
       }
       updates[field] = value.trim();
+    }
+
+    if (updates.whatsappNumber && !/^[+\d\s().-]{7,24}$/.test(updates.whatsappNumber)) {
+      res.status(400).json({ status: "Failed", message: "Le numéro WhatsApp est invalide." });
+      return;
     }
 
     for (const field of ["websiteUrl", "facebookUrl", "instagramUrl", "tiktokUrl", "youtubeUrl"]) {

@@ -378,7 +378,7 @@ const listOrders = expressAsyncHandler(async (req: Request, res: Response) => {
 
   const [orders, total] = await Promise.all([MarketplaceOrder.find(filter)
     .populate("owner_id", "username email phonenumber")
-    .populate("subOrders.boutiks_id", "name phoneNumber email logo ville")
+    .populate("subOrders.boutiks_id", "name phoneNumber whatsappNumber email logo ville adresse")
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit).limit(limit).lean(), MarketplaceOrder.countDocuments(filter)]);
   const visibleOrders = role === "Boutiks"
@@ -424,7 +424,7 @@ const listDisputes = expressAsyncHandler(async (req: Request, res: Response) => 
   const filter = { "subOrders.status": "litige" };
   const [orders, total] = await Promise.all([MarketplaceOrder.find(filter)
     .populate("owner_id", "username email phonenumber")
-    .populate("subOrders.boutiks_id", "name phoneNumber email logo ville")
+    .populate("subOrders.boutiks_id", "name phoneNumber whatsappNumber email logo ville adresse")
     .sort({ updatedAt: -1 })
     .skip((page - 1) * limit).limit(limit).lean(), MarketplaceOrder.countDocuments(filter)]);
   res.status(200).json({ status: "Success", data: orders.map(safeOrder), pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
@@ -523,6 +523,63 @@ const getPaymentEvidence = expressAsyncHandler(async (req: Request, res: Respons
   }
   res.setHeader("Cache-Control", "private, no-store");
   res.sendFile(filePath);
+});
+
+const issueSubOrderInvoice = expressAsyncHandler(async (req: Request, res: Response) => {
+  const order = await findOrderById(req.params.orderId);
+  const subOrder = getSubOrder(order, req.params.subOrderId);
+  const shop = await getSellerShop(req);
+  if (!order || !subOrder || !shop || String(shop._id) !== String(subOrder.boutiks_id?._id ?? subOrder.boutiks_id)) {
+    res.status(404).json({ status: "Failed", message: "Commande boutique introuvable." });
+    return;
+  }
+  if (subOrder.paymentStatus !== "confirme") {
+    res.status(409).json({ status: "Failed", message: "La facture peut être émise après confirmation du paiement." });
+    return;
+  }
+  if (subOrder.invoiceNumber) {
+    res.status(200).json({ status: "Success", data: { invoiceNumber: subOrder.invoiceNumber, invoiceIssuedAt: subOrder.invoiceIssuedAt }, message: "La facture existe déjà." });
+    return;
+  }
+  const invoiceNumber = `FAC-${new Date().getFullYear()}-${String(order._id).slice(-6).toUpperCase()}-${String(subOrder._id).slice(-6).toUpperCase()}`;
+  const updated = await updateSubOrder(req.params.orderId, req.params.subOrderId, { invoiceNumber, invoiceIssuedAt: new Date() });
+  const issued = updated && getSubOrder(updated, req.params.subOrderId);
+  res.status(issued?.invoiceNumber ? 200 : 409).json({
+    status: issued?.invoiceNumber ? "Success" : "Failed",
+    data: issued ? { invoiceNumber: issued.invoiceNumber, invoiceIssuedAt: issued.invoiceIssuedAt } : undefined,
+    message: issued?.invoiceNumber ? "Facture émise. Le client peut maintenant la télécharger." : "Impossible d’émettre la facture, actualisez la commande.",
+  });
+});
+
+const escapeInvoiceHtml = (value: unknown) => String(value ?? "")
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  .replace(/\"/g, "&quot;").replace(/'/g, "&#39;");
+
+const downloadSubOrderInvoice = expressAsyncHandler(async (req: Request, res: Response) => {
+  const order = await findOrderById(req.params.orderId);
+  const subOrder = getSubOrder(order, req.params.subOrderId);
+  if (!order || !subOrder || !subOrder.invoiceNumber || !subOrder.invoiceIssuedAt) {
+    res.status(404).json({ status: "Failed", message: "Facture indisponible." });
+    return;
+  }
+  const token = req.get("x-order-token") ?? req.query.token;
+  const buyer = canActAsBuyer(req, order, token);
+  const shop = await getSellerShop(req);
+  const seller = Boolean(shop && String(shop._id) === String(subOrder.boutiks_id?._id ?? subOrder.boutiks_id));
+  if (!buyer && !seller && await getRequestRole(req) !== "Super Admin") {
+    res.status(403).json({ status: "Failed", message: "Accès refusé." });
+    return;
+  }
+  const shopData: any = subOrder.boutiks_id;
+  const esc = escapeInvoiceHtml;
+  const date = new Date(subOrder.invoiceIssuedAt).toLocaleDateString("fr-FR");
+  const rows = subOrder.items.map((item) => `<tr><td>${esc(item.name)}${Object.keys(item.variants ?? {}).length ? `<small>${esc(Object.entries(item.variants).map(([key, value]) => `${key}: ${value}`).join(" · "))}</small>` : ""}</td><td>${item.quantity}</td><td>${Number(item.unitPrice).toLocaleString("fr-FR")} MGA</td><td>${(Number(item.unitPrice) * Number(item.quantity)).toLocaleString("fr-FR")} MGA</td></tr>`).join("");
+  const html = `<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Facture ${esc(subOrder.invoiceNumber)}</title><style>body{font:15px Arial,sans-serif;color:#17211d;margin:40px auto;max-width:850px;padding:0 24px}header,.row{display:flex;justify-content:space-between;gap:24px}h1{font-size:30px;margin:0 0 8px}small{display:block;color:#66736d;margin-top:5px}.muted{color:#66736d}table{border-collapse:collapse;width:100%;margin:32px 0}th,td{text-align:left;border-bottom:1px solid #dce5df;padding:13px 9px}th{background:#f1f6f3}.total{margin-left:auto;width:min(320px,100%)}.total p{display:flex;justify-content:space-between}.grand{font-size:20px;font-weight:bold;border-top:2px solid #183e2d;padding-top:14px}@media print{body{margin:15mm auto}button{display:none}}</style><body><header><div><h1>FACTURE</h1><strong>${esc(subOrder.invoiceNumber)}</strong><p class="muted">Émise le ${esc(date)}</p></div><div><strong>${esc(shopData?.name ?? "Boutique")}</strong><p>${esc(shopData?.adresse ?? "")}${shopData?.ville ? `, ${esc(shopData.ville)}` : ""}</p><p>${esc(shopData?.phoneNumber ?? "")}${shopData?.email ? ` · ${esc(shopData.email)}` : ""}</p></div></header><section class="row"><div><strong>Facturé à</strong><p>${esc(order.customer.name)}<br>${esc(order.customer.address)}${order.customer.city ? `, ${esc(order.customer.city)}` : ""}<br>${esc(order.customer.phone)}${order.customer.email ? `<br>${esc(order.customer.email)}` : ""}</p></div><div><strong>Commande</strong><p>#${esc(String(order._id).slice(-8).toUpperCase())}<br>Mode de paiement : ${esc(subOrder.paymentMethod)}<br>Statut : payé</p></div></section><table><thead><tr><th>Article</th><th>Qté</th><th>Prix unitaire</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table><div class="total"><p><span>Sous-total</span><strong>${Number(subOrder.subtotal).toLocaleString("fr-FR")} MGA</strong></p><p><span>Livraison</span><strong>${Number(subOrder.deliveryFee).toLocaleString("fr-FR")} MGA</strong></p><p class="grand"><span>Total payé</span><strong>${Number(subOrder.payableTotal).toLocaleString("fr-FR")} MGA</strong></p></div><p class="muted">Merci pour votre commande.</p><button onclick="window.print()">Imprimer / Enregistrer en PDF</button></body></html>`;
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  const disposition = req.query.view === "1" ? "inline" : "attachment";
+  res.setHeader("Content-Disposition", `${disposition}; filename="${subOrder.invoiceNumber}.html"`);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.send(html);
 });
 
 const updateSubOrderStatus = expressAsyncHandler(async (req: Request, res: Response) => {
@@ -675,6 +732,8 @@ export {
   expireOrders,
   getOrderForTracking,
   getPaymentEvidence,
+  downloadSubOrderInvoice,
+  issueSubOrderInvoice,
   getPublicPaymentMethods,
   getSellerPaymentMethods,
   getSellerOrderSummary,

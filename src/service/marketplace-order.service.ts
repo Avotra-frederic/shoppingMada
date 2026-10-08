@@ -247,7 +247,7 @@ const processExpiredMarketplaceOrders = async (now = new Date()) => {
 const findOrderById = (id: string, includeTokenHash = false) => {
   const query = MarketplaceOrder.findById(id)
     .populate("owner_id", "username email phonenumber")
-    .populate("subOrders.boutiks_id", "name phoneNumber email logo ville");
+    .populate("subOrders.boutiks_id", "name phoneNumber whatsappNumber email logo ville adresse");
   return includeTokenHash ? query.select("+trackingTokenHash") : query;
 };
 

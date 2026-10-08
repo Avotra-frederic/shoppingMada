@@ -13,6 +13,7 @@ const BoutiksSheme = new Schema({
         type: String,
         required: true,
     },
+    whatsappNumber: { type: String, trim: true, maxlength: 24 },
     email:{
         type: String,
         required: true,

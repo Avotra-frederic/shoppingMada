@@ -44,6 +44,8 @@ const subOrderSchema = new Schema(
     },
     paymentStatus: { type: String, enum: ["a_payer", "declare", "confirme"], required: true, default: "a_payer" },
     paymentConfirmedAt: Date,
+    invoiceNumber: { type: String, trim: true, maxlength: 60 },
+    invoiceIssuedAt: Date,
     status: { type: String, enum: MARKET_ORDER_STATUSES, required: true },
     disputePreviousStatus: { type: String, enum: MARKET_ORDER_STATUSES },
     expiresAt: Date,

@@ -57,6 +57,8 @@ export interface IMarketplaceSubOrder {
   };
   paymentStatus: "a_payer" | "declare" | "confirme";
   paymentConfirmedAt?: Date;
+  invoiceNumber?: string;
+  invoiceIssuedAt?: Date;
   status: MarketplaceOrderStatus;
   disputePreviousStatus?: MarketplaceOrderStatus;
   expiresAt?: Date;
