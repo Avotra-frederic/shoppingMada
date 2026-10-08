@@ -21,4 +21,5 @@ export default interface IProduct extends Document{
     moderationReason?: string,
     moderatedBy?: Types.ObjectId | string,
     moderatedAt?: Date
+    wishlistedBy?: Types.ObjectId[]
 }

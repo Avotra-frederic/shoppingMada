@@ -25,9 +25,10 @@ const deleteComment = async(id: string): Promise<IComment | null> =>{
 const findComment = async (id: string): Promise<IComment | null> =>
     Comment.findById(id).lean<IComment>();
 
-const getCommentsForModeration = async (): Promise<IComment[]> =>
+const getCommentsForModeration = async (page = 1, limit = 25): Promise<IComment[]> =>
     Comment.find({})
         .sort({ createdAt: -1 })
+        .skip((page - 1) * limit).limit(limit)
         .lean<IComment[]>()
         .populate("owner_id", "username email")
         .populate("product_id", "name boutiks_id");

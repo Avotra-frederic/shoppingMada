@@ -1,13 +1,17 @@
 import { Router } from "express";
-import { addNewVariant, deleteBoutiksProduct, getProduct, listProductsForModeration, moderateProductPublication, removeVariant, search_product, storeProduct, updateProductVariant } from "../controller/product.controller";
+import { addNewVariant, deleteBoutiksProduct, getProduct, listProductsForModeration, moderateProductPublication, moderateProductsInBulk, removeVariant, search_product, storeProduct, updateProductVariant, toggleWishlist, listWishlist } from "../controller/product.controller";
 import { auth } from "../middleware/auth.middleware";
 import { uploadProductImageFiles } from "../middleware/upload_single_image.middleware";
 import { product_validator, variant_validator } from "../validator/product.validator";
 import validator from "../middleware/validator.middleware";
+import requireAdminStepUp from "../middleware/admin-step-up.middleware";
 
 const productRoutes = Router();
 productRoutes.get("/admin/products", auth, listProductsForModeration);
-productRoutes.put("/admin/products/:id/moderation", auth, moderateProductPublication);
+productRoutes.get("/wishlist", auth, listWishlist);
+productRoutes.put("/wishlist/:id", auth, toggleWishlist);
+productRoutes.put("/admin/products/:id/moderation", auth, requireAdminStepUp, moderateProductPublication);
+productRoutes.put("/admin/products/moderation/bulk", auth, requireAdminStepUp, moderateProductsInBulk);
 productRoutes.get("/boutiks/product/:id?", auth,getProduct);
 productRoutes.delete("/shop/product/:id", auth,deleteBoutiksProduct);
 productRoutes.get("/shop/:category?/product/:id?",getProduct);

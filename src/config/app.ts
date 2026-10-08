@@ -20,12 +20,15 @@ import userRouter from "../routers/user.routes";
 import subscriptionRoute from "../routers/subscription.routes";
 import marketplaceOrderRoutes from "../routers/marketplace-order.routes";
 import contactRoutes from "../routers/contact.routes";
+import adminRoutes from "../routers/admin.routes";
+import PersonnalInfo from "../model/personnalInfo";
+import notificationRoutes from "../routers/notification.routes";
 const csrf = new CSRF();
 const corsOption: cors.CorsOptions = {
   origin: process.env.ALLOWED_ORIGIN as string,
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   credentials: true,
-  allowedHeaders: ["Content-Type", "Authorization", "xsrf-token","Origin"],
+  allowedHeaders: ["Content-Type", "Authorization", "xsrf-token", "x-admin-step-up", "Origin"],
   preflightContinue: false,
   
 };
@@ -39,11 +42,16 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 app.use(mongoSanitize());
 
-app.use("/api/v1/uploads", (req: Request, res: Response, next: NextFunction) => {
+app.use("/api/v1/uploads", expressAsyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const filename = path.basename(req.path);
+  if (filename && await PersonnalInfo.exists({ $or: [{ frontImage: filename }, { backImage: filename }] })) {
+    res.status(404).end();
+    return;
+  }
   res.setHeader("Access-Control-Allow-Origin", process.env.ALLOWED_ORIGIN as string);
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
   next();
-});
+}));
 app.use(
   "/api/v1/uploads",
   express.static(path.join(__dirname, "../../public/uploads")),
@@ -103,6 +111,8 @@ app.use("/api/v1", command_routes);
 app.use("/api/v1", marketplaceOrderRoutes);
 app.use("/api/v1", subscriptionRoute);
 app.use("/api/v1", contactRoutes);
+app.use("/api/v1", adminRoutes);
+app.use("/api/v1", notificationRoutes);
 app.use((req: Request, res: Response) => {
   res.status(404).json({ status: "Error", message: `Route introuvable: ${req.method} ${req.path}` });
 });

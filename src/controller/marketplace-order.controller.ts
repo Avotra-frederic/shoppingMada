@@ -17,6 +17,9 @@ import { getPaymentProvider } from "../service/payment-provider.service";
 import { findBoutiks } from "../service/boutiks.service";
 import { getProductById } from "../service/product.service";
 import { get_user_group_name } from "../service/user_group_member.service";
+import { recordAdminAction } from "../service/admin-audit.service";
+import FinancialEntry from "../model/financial-entry.model";
+import { notifyUserIfEnabled } from "../service/notification.service";
 import { paymentEvidenceDirectory } from "../config/uploadsingle_multer";
 import {
   createMarketplaceOrder,
@@ -240,6 +243,7 @@ const createOrder = expressAsyncHandler(async (req: Request, res: Response) => {
       return;
     }
     const settings = await ShopPaymentSettings.findOne({ boutiks_id: bucket.shopId }).lean<any>();
+    const shop = await MarketplaceOrder.db.model("Boutiks").findById(bucket.shopId).select("commissionPercent").lean<any>();
     const selectedMethod = settings?.paymentMethods.find((entry: IShopPaymentMethod) => entry.method === method && entry.enabled);
     if (!settings || !selectedMethod) {
       res.status(409).json({ status: "Failed", message: "Un mode de paiement sélectionné n’est plus disponible." });
@@ -251,6 +255,7 @@ const createOrder = expressAsyncHandler(async (req: Request, res: Response) => {
       boutiks_id: bucket.shopId,
       items: bucket.items,
       subtotal: bucket.subtotal,
+      commissionPercent: Number(shop?.commissionPercent ?? 0),
       deliveryFee: settings.deliveryFee,
       payableTotal: bucket.subtotal + settings.deliveryFee,
       paymentMethod: method,
@@ -292,6 +297,12 @@ const createOrder = expressAsyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
+  for (const subOrder of order.subOrders) {
+    const shop: any = await MarketplaceOrder.db.model("Boutiks").findById(subOrder.boutiks_id).select("owner_id").lean();
+    const sellerOwnerId = shop?.owner_id;
+    if (sellerOwnerId) await notifyUserIfEnabled({ _id: sellerOwnerId }, { kind: "order.new", title: "Nouvelle commande", message: `Une commande de ${subOrder.payableTotal} MGA attend votre réponse.`, targetType: "marketplace-order", targetId: String(order._id) });
+  }
+
   res.setHeader("Cache-Control", "no-store");
   res.status(201).json({
     status: "Success",
@@ -299,6 +310,32 @@ const createOrder = expressAsyncHandler(async (req: Request, res: Response) => {
     data: safeOrder(order),
     ...(trackingToken ? { trackingToken } : {}),
   });
+});
+
+const getSellerOrderSummary = expressAsyncHandler(async (req: Request, res: Response) => {
+  const role = await getRequestRole(req);
+  if (role !== "Boutiks") {
+    res.status(403).json({ status: "Failed", message: "Cette synthèse est réservée aux vendeurs." });
+    return;
+  }
+  const shop = await getSellerShop(req);
+  if (!shop) {
+    res.status(404).json({ status: "Failed", message: "Boutique introuvable." });
+    return;
+  }
+  const summary = await MarketplaceOrder.aggregate([
+    { $unwind: "$subOrders" },
+    { $match: { "subOrders.boutiks_id": shop._id } },
+    { $group: {
+      _id: null,
+      total: { $sum: 1 },
+      pending: { $sum: { $cond: [{ $in: ["$subOrders.status", ["en_attente_vendeur", "paiement_declare"]] }, 1, 0] } },
+      inProgress: { $sum: { $cond: [{ $in: ["$subOrders.status", ["paiement_confirme", "en_preparation", "expediee", "litige"]] }, 1, 0] } },
+      completed: { $sum: { $cond: [{ $in: ["$subOrders.status", ["livree", "terminee", "partiellement_terminee"]] }, 1, 0] } },
+      confirmedSalesMGA: { $sum: { $cond: [{ $eq: ["$subOrders.paymentStatus", "confirme"] }, "$subOrders.payableTotal", 0] } },
+    } },
+  ]);
+  res.status(200).json({ status: "Success", data: summary[0] ?? { total: 0, pending: 0, inProgress: 0, completed: 0, confirmedSalesMGA: 0 } });
 });
 
 const listOrders = expressAsyncHandler(async (req: Request, res: Response) => {
@@ -321,15 +358,60 @@ const listOrders = expressAsyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
-  const orders = await MarketplaceOrder.find(filter)
+  const page = Math.max(1, Number.parseInt(String(req.query.page ?? "1"), 10) || 1);
+  const limit = Math.min(100, Math.max(1, Number.parseInt(String(req.query.limit ?? "25"), 10) || 25));
+  const search = typeof req.query.search === "string" ? req.query.search.trim().slice(0, 100) : "";
+  const requestedStatus = typeof req.query.status === "string" ? req.query.status : "";
+  if (requestedStatus && requestedStatus !== "all" && !(MARKET_ORDER_STATUSES as readonly string[]).includes(requestedStatus)) {
+    res.status(400).json({ status: "Failed", message: "Filtre de statut invalide." });
+    return;
+  }
+  if (requestedStatus && requestedStatus !== "all") {
+    filter.subOrders = role === "Boutiks"
+      ? { $elemMatch: { boutiks_id: new Types.ObjectId(String(sellerShopId)), status: requestedStatus } }
+      : { $elemMatch: { status: requestedStatus } };
+  }
+  if (search) filter.$or = [
+    { "customer.name": { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } },
+    { "customer.phone": { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } },
+  ];
+
+  const [orders, total] = await Promise.all([MarketplaceOrder.find(filter)
     .populate("owner_id", "username email phonenumber")
     .populate("subOrders.boutiks_id", "name phoneNumber email logo ville")
     .sort({ createdAt: -1 })
-    .lean();
+    .skip((page - 1) * limit).limit(limit).lean(), MarketplaceOrder.countDocuments(filter)]);
   const visibleOrders = role === "Boutiks"
     ? orders.map((order: any) => ({ ...order, subOrders: order.subOrders.filter((subOrder: any) => String(subOrder.boutiks_id?._id ?? subOrder.boutiks_id) === sellerShopId) }))
     : orders;
-  res.status(200).json({ status: "Success", data: visibleOrders.map(safeOrder) });
+  let responseOrders = visibleOrders;
+  if (role === "Client") {
+    const sourceIds = visibleOrders.flatMap((order: any) => order.subOrders.map((subOrder: any) => String(subOrder._id)));
+    const refunds = sourceIds.length
+      ? await FinancialEntry.find({ kind: "refund", sourceType: "marketplace", sourceId: { $in: sourceIds }, ownerId: user._id })
+        .select("sourceId amountMGA createdAt")
+        .sort({ createdAt: -1 })
+        .lean<any[]>()
+      : [];
+    const refundsBySubOrder = new Map<string, any[]>();
+    for (const refund of refunds) {
+      const current = refundsBySubOrder.get(refund.sourceId) ?? [];
+      current.push({ amountMGA: refund.amountMGA, createdAt: refund.createdAt });
+      refundsBySubOrder.set(refund.sourceId, current);
+    }
+    responseOrders = visibleOrders.map((order: any) => ({
+      ...order,
+      subOrders: order.subOrders.map((subOrder: any) => {
+        const refundHistory = refundsBySubOrder.get(String(subOrder._id)) ?? [];
+        return {
+          ...subOrder,
+          refundedMGA: refundHistory.reduce((total: number, refund: any) => total + Number(refund.amountMGA), 0),
+          refundHistory,
+        };
+      }),
+    }));
+  }
+  res.status(200).json({ status: "Success", data: responseOrders.map(safeOrder), pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
 });
 
 const listDisputes = expressAsyncHandler(async (req: Request, res: Response) => {
@@ -337,12 +419,15 @@ const listDisputes = expressAsyncHandler(async (req: Request, res: Response) => 
     res.status(403).json({ status: "Failed", message: "Accès réservé au Super Admin." });
     return;
   }
-  const orders = await MarketplaceOrder.find({ "subOrders.status": "litige" })
+  const page = Math.max(1, Number.parseInt(String(req.query.page ?? "1"), 10) || 1);
+  const limit = Math.min(100, Math.max(1, Number.parseInt(String(req.query.limit ?? "25"), 10) || 25));
+  const filter = { "subOrders.status": "litige" };
+  const [orders, total] = await Promise.all([MarketplaceOrder.find(filter)
     .populate("owner_id", "username email phonenumber")
     .populate("subOrders.boutiks_id", "name phoneNumber email logo ville")
     .sort({ updatedAt: -1 })
-    .lean();
-  res.status(200).json({ status: "Success", data: orders.map(safeOrder) });
+    .skip((page - 1) * limit).limit(limit).lean(), MarketplaceOrder.countDocuments(filter)]);
+  res.status(200).json({ status: "Success", data: orders.map(safeOrder), pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
 });
 
 const getOrderForTracking = expressAsyncHandler(async (req: Request, res: Response) => {
@@ -509,6 +594,7 @@ const updateSubOrderStatus = expressAsyncHandler(async (req: Request, res: Respo
   if (["annulee", "refusee"].includes(status)) {
     await releaseSubOrderStock(req.params.orderId, req.params.subOrderId);
   }
+  if (updated && isSeller && order.owner_id) await notifyUserIfEnabled({ _id: (order.owner_id as any)._id ?? order.owner_id }, { kind: "order.status", title: "Mise à jour de commande", message: `Votre commande est maintenant : ${status}.`, targetType: "marketplace-order", targetId: String(order._id) });
   res.status(200).json({ status: "Success", message: "Sous-commande mise à jour.", data: safeOrder(updated) });
 });
 
@@ -532,7 +618,7 @@ const confirmPayment = expressAsyncHandler(async (req: Request, res: Response) =
     res.status(409).json({ status: "Failed", message: "Aucun paiement à confirmer pour cette sous-commande." });
     return;
   }
-  const updates: Record<string, unknown> = { paymentStatus: "confirme" };
+    const updates: Record<string, unknown> = { paymentStatus: "confirme", paymentConfirmedAt: new Date() };
   if (isDeclaredPayment) updates.status = "paiement_confirme";
   const updated = await updateSubOrder(
     req.params.orderId,
@@ -540,6 +626,8 @@ const confirmPayment = expressAsyncHandler(async (req: Request, res: Response) =
     updates,
     { expectedStatus: subOrder.status, actor: "vendeur", note: "Réception du paiement confirmée par le vendeur." },
   );
+  if (updated && order.owner_id) await notifyUserIfEnabled({ _id: (order.owner_id as any)._id ?? order.owner_id }, { kind: "order.payment", title: "Paiement reçu par le vendeur", message: `Le vendeur a confirmé ${subOrder.payableTotal} MGA.`, targetType: "marketplace-order", targetId: String(order._id) });
+  if (updated) await FinancialEntry.updateOne({ kind: "marketplace_payment", sourceId: String(subOrder._id) }, { $setOnInsert: { kind: "marketplace_payment", sourceId: String(subOrder._id), sourceType: "marketplace", amountMGA: Number(subOrder.payableTotal ?? 0), ownerId: order.owner_id } }, { upsert: true });
   res.status(updated ? 200 : 409).json({ status: updated ? "Success" : "Failed", data: updated ? safeOrder(updated) : undefined, message: updated ? "Réception du paiement confirmée." : "La commande a changé d’état, veuillez actualiser." });
 });
 
@@ -565,13 +653,14 @@ const resolveDispute = expressAsyncHandler(async (req: Request, res: Response) =
     {
       status: resolution,
       disputePreviousStatus: null,
-      ...(resolution === "paiement_confirme" ? { paymentStatus: "confirme" } : {}),
+      ...(resolution === "paiement_confirme" ? { paymentStatus: "confirme", paymentConfirmedAt: new Date() } : {}),
     },
     { expectedStatus: "litige", actor: "super_admin", note: String(req.body.reason ?? "Décision du Super Admin.").slice(0, 500) },
   );
   if (["annulee", "refusee", "expiree"].includes(resolution)) {
     await releaseSubOrderStock(req.params.orderId, req.params.subOrderId);
   }
+    if (updated) await recordAdminAction({ actorId: String((req as any).user._id), actorName: (req as any).user.username ?? "Super Admin", action: `marketplace.dispute.${resolution}`, targetType: "marketplace-order", targetId: req.params.orderId, targetLabel: req.params.subOrderId, reason: String(req.body.reason ?? "").slice(0, 500), ip: req.ip });
   res.status(updated ? 200 : 409).json({ status: updated ? "Success" : "Failed", data: updated ? safeOrder(updated) : undefined, message: updated ? "Litige traité." : "Le litige a changé d’état." });
 });
 
@@ -588,6 +677,7 @@ export {
   getPaymentEvidence,
   getPublicPaymentMethods,
   getSellerPaymentMethods,
+  getSellerOrderSummary,
   listDisputes,
   listOrders,
   resolveDispute,

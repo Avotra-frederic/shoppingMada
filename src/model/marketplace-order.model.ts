@@ -27,6 +27,7 @@ const subOrderSchema = new Schema(
     boutiks_id: { type: Types.ObjectId, ref: "Boutiks", required: true, index: true },
     items: { type: [itemSnapshotSchema], required: true },
     subtotal: { type: Number, required: true, min: 0 },
+    commissionPercent: { type: Number, min: 0, max: 50, default: 0 },
     deliveryFee: { type: Number, required: true, min: 0 },
     payableTotal: { type: Number, required: true, min: 0 },
     paymentMethod: {
@@ -42,6 +43,7 @@ const subOrderSchema = new Schema(
       instructions: String,
     },
     paymentStatus: { type: String, enum: ["a_payer", "declare", "confirme"], required: true, default: "a_payer" },
+    paymentConfirmedAt: Date,
     status: { type: String, enum: MARKET_ORDER_STATUSES, required: true },
     disputePreviousStatus: { type: String, enum: MARKET_ORDER_STATUSES },
     expiresAt: Date,

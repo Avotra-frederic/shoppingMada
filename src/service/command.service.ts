@@ -19,6 +19,16 @@ const getBoutiksCommand = async(id: string): Promise<ICommand[] | null> => {
     }
 }
 
+const listBoutiksCommand = async (id: string, options: { page: number; limit: number; status?: string }) => {
+    const filter: Record<string, unknown> = { boutiks_id: id };
+    if (options.status && options.status !== "all") filter.status = options.status;
+    const [data, total] = await Promise.all([
+        Command.find(filter).sort({ createdAt: -1, _id: -1 }).skip((options.page - 1) * options.limit).limit(options.limit).lean<ICommand[]>().populate({path:"product_id",populate:{path:"boutiks_id"}}).populate("owner_id"),
+        Command.countDocuments(filter),
+    ]);
+    return { data, pagination: { page: options.page, limit: options.limit, total, pages: Math.ceil(total / options.limit) } };
+}
+
 const getClientCommand = async(id: string): Promise<ICommand[] | null> => {
     try {
         const commande = await Command.find({owner_id: id}).lean<ICommand[]>().populate({path:"product_id",populate:{path:"boutiks_id"}}).populate("owner_id");
@@ -60,4 +70,4 @@ const getCommandeById = async(id:string): Promise<ICommand | null> =>{
         throw error;
     }
 }
-export {addCommande, deleteProductCommand, getBoutiksCommand, updateStatus, getClientCommand,deleteCommande, getCommandeById}
+export {addCommande, deleteProductCommand, getBoutiksCommand, listBoutiksCommand, updateStatus, getClientCommand,deleteCommande, getCommandeById}

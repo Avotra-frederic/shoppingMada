@@ -6,6 +6,7 @@ const arrayLimit = (val: any[]): boolean => {
 
 const ProductScheme = new Schema<IProduct>(
   {
+    wishlistedBy: { type: [Types.ObjectId], ref: "User", default: [], select: false },
     name: {
       type: String,
       required: true,
@@ -85,6 +86,9 @@ const ProductScheme = new Schema<IProduct>(
   },
   { timestamps: true },
 );
+
+ProductScheme.index({ owner_id: 1, createdAt: -1 });
+ProductScheme.index({ owner_id: 1, publicationStatus: 1, createdAt: -1 });
 
 const Product = models.Product || model<IProduct>("Product", ProductScheme);
 export default Product;

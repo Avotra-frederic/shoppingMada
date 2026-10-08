@@ -8,6 +8,7 @@ export default interface IComment extends Document
     product_id: Types.ObjectId | string,
     moderationStatus?: "Pending" | "Approved" | "Rejected",
     moderationReason?: string,
+    verifiedPurchase?: boolean,
     moderatedBy?: Types.ObjectId | string,
     moderatedAt?: Date
 }

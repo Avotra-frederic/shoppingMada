@@ -181,6 +181,7 @@ const updateBoutiksInfo = expressAsyncHandler(
     res.status(200).json({
       status: "Success",
       message: "La boutique a été mise à jour.",
+      data: { logo: updatedBoutiks.logo },
     });
   },
 );

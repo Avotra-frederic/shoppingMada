@@ -126,7 +126,7 @@ const updateUser = async (
   newInfo: IUser,
 ): Promise<IUser | null> => {
   try {
-    const user = await User.findByIdAndUpdate(id, newInfo, { new: true });
+    const user = await User.findByIdAndUpdate(id, newInfo, { new: true, runValidators: true }).lean<IUser>();
     return user ? user : null;
   } catch (error) {
     throw error;

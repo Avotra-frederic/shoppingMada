@@ -44,6 +44,7 @@ export interface IMarketplaceSubOrder {
   boutiks_id: Types.ObjectId;
   items: IOrderItemSnapshot[];
   subtotal: number;
+  commissionPercent: number;
   deliveryFee: number;
   payableTotal: number;
   paymentMethod: PaymentMethod;
@@ -55,6 +56,7 @@ export interface IMarketplaceSubOrder {
     instructions?: string;
   };
   paymentStatus: "a_payer" | "declare" | "confirme";
+  paymentConfirmedAt?: Date;
   status: MarketplaceOrderStatus;
   disputePreviousStatus?: MarketplaceOrderStatus;
   expiresAt?: Date;

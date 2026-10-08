@@ -26,6 +26,15 @@ const personalInfoSheme = new Schema<IPersonalInfo>({
     backImage:{
         type: String
     },
+    verificationStatus: {
+        type: String,
+        enum: ["not_submitted", "pending", "approved", "rejected"],
+        default: "not_submitted",
+        index: true,
+    },
+    verificationReason: { type: String, maxlength: 500 },
+    reviewedAt: Date,
+    reviewedBy: { type: Schema.Types.ObjectId, ref: "User" },
     owner_id:{
         type: Schema.Types.ObjectId,
         ref: "User",

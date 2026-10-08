@@ -26,6 +26,7 @@ const commentScheme = new Schema({
         default: "Pending",
         index: true,
     },
+    verifiedPurchase: { type: Boolean, default: false },
     moderationReason: { type: String, maxlength: 500 },
     moderatedBy: { type: Schema.Types.ObjectId, ref: "User" },
     moderatedAt: { type: Date },

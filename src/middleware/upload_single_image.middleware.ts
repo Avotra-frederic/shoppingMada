@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import expressAsyncHandler from "express-async-handler";
-import upload, { uploadImage, uploadProductImages } from "../config/uploadsingle_multer";
+import upload, { uploadImage, uploadKycImages, uploadProductImages } from "../config/uploadsingle_multer";
 
 const normalizeBoutikCategories = (req: Request) => {
     const value = req.body?.product_category;
@@ -42,6 +42,19 @@ const uploadMultiImage = expressAsyncHandler(async(req: Request, res: Response, 
     });
 })
 
+const uploadKycImageFiles = expressAsyncHandler(async(req: Request, res: Response, next: NextFunction) => {
+    uploadKycImages(req, res, async(err: any) => {
+        if (err) return next(err);
+        const files = req.files as Express.Multer.File[] | undefined;
+        if (files?.length === 2) {
+            (req as any).fileNames = files.map((file) => file.filename);
+            next();
+        } else {
+            res.status(400).json({ status: "Failed", message: "Les photos du recto et du verso sont obligatoires." });
+        }
+    });
+});
+
 const uploadProductImageFiles = expressAsyncHandler(async(req: Request, res: Response, next: NextFunction) => {
     uploadProductImages(req, res, async(err: any) => {
         if (err) return next(err);
@@ -50,4 +63,4 @@ const uploadProductImageFiles = expressAsyncHandler(async(req: Request, res: Res
     });
 });
 
-export {upload_single_image, uploadMultiImage, uploadProductImageFiles};
+export {upload_single_image, uploadMultiImage, uploadKycImageFiles, uploadProductImageFiles};

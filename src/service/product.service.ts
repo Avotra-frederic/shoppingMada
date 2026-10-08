@@ -36,6 +36,20 @@ const getBoutiksProduct = async (
   }
 };
 
+const listBoutiksProducts = async (ownerId: string, options: { page: number; limit: number; q?: string; status?: string }) => {
+  const filter: Record<string, unknown> = { owner_id: ownerId };
+  if (options.status && options.status !== "all") filter.publicationStatus = options.status;
+  if (options.q) {
+    const safe = options.q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    filter.$or = [{ name: { $regex: safe, $options: "i" } }, { description: { $regex: safe, $options: "i" } }];
+  }
+  const [data, total] = await Promise.all([
+    Product.find(filter).sort({ createdAt: -1, _id: -1 }).skip((options.page - 1) * options.limit).limit(options.limit).lean<IProduct[]>(),
+    Product.countDocuments(filter),
+  ]);
+  return { data, pagination: { page: options.page, limit: options.limit, total, pages: Math.ceil(total / options.limit) } };
+};
+
 const getAllProductInCategory = async (
   slug: string,
 ): Promise<IProduct[] | null> => {
@@ -50,6 +64,22 @@ const getAllProductInCategory = async (
   } catch (error) {
     throw error;
   }
+};
+
+const listPublicProducts = async (options: { page: number; limit: number; q?: string; location?: string; category?: string; sort?: string; minPrice?: number; maxPrice?: number }) => {
+  const activeBoutikIds = await getActiveBoutikIds();
+  const filter: any = { publicationStatus: "Approved", boutiks_id: { $in: activeBoutikIds } };
+  if (options.category) filter.category = options.category;
+  if (options.minPrice !== undefined || options.maxPrice !== undefined) {
+    filter.price = {};
+    if (options.minPrice !== undefined) filter.price.$gte = options.minPrice;
+    if (options.maxPrice !== undefined) filter.price.$lte = options.maxPrice;
+  }
+  if (options.q) { const safe = options.q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); filter.$or = [{ name: { $regex: safe, $options: "i" } }, { description: { $regex: safe, $options: "i" } }, { details: { $regex: safe, $options: "i" } }]; }
+  if (options.location) { const safe = options.location.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); const shops = await (await import("../model/boutiks.model")).default.find({ _id: { $in: activeBoutikIds }, ville: { $regex: safe, $options: "i" } }).distinct("_id"); filter.boutiks_id = { $in: shops }; }
+  const sort: Record<string, 1 | -1> = options.sort === "price_asc" ? { price: 1, _id: 1 } : options.sort === "price_desc" ? { price: -1, _id: -1 } : options.sort === "oldest" ? { createdAt: 1, _id: 1 } : { createdAt: -1, _id: -1 };
+  const [data, total] = await Promise.all([Product.find(filter).sort(sort).skip((options.page - 1) * options.limit).limit(options.limit).populate("boutiks_id").lean(), Product.countDocuments(filter)]);
+  return { data, pagination: { page: options.page, limit: options.limit, total, pages: Math.ceil(total / options.limit) } };
 };
 
 const addProductVariant = async (
@@ -108,12 +138,15 @@ const getProductById = async (id: string): Promise<IProduct | null> => {
   }
 };
 
-const getProductsForModeration = async (): Promise<IProduct[]> =>
-  Product.find({})
+const getProductsForModeration = async (page = 1, limit = 25) => {
+  const [data, total] = await Promise.all([Product.find({})
     .sort({ createdAt: -1 })
+    .skip((page - 1) * limit).limit(limit)
     .lean<IProduct[]>()
     .populate("boutiks_id", "name logo")
-    .populate("owner_id", "username email");
+    .populate("owner_id", "username email"), Product.countDocuments({})]);
+  return { data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
+};
 
 const moderateProduct = async (
   id: string,
@@ -215,12 +248,14 @@ export {
   create_product,
   getAllProduct,
   getAllProductInCategory,
+  listPublicProducts,
   getProductById,
   deleteProduct,
   updateProduct,
   updateVariant,
   deleteVariant,
   getBoutiksProduct,
+  listBoutiksProducts,
   addProductVariant,
   searchProduct,
   getProductsForModeration,

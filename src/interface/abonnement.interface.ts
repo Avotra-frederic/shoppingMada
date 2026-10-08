@@ -19,4 +19,11 @@ export default interface ISubscription extends Document{
     paymentAccountNumber?: string;
     paymentInstructions?: string;
     priceMGA?: number;
+    lifecycleStatus?: "active" | "grace" | "expired" | "canceled";
+    cancelAtPeriodEnd?: boolean;
+    canceledAt?: Date;
+    graceUntil?: Date;
+    autoRenew?: boolean;
+    refundedMGA?: number;
+    paymentCompletedAt?: Date;
 }

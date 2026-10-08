@@ -48,6 +48,16 @@ const uploadProductImages = multer({
 
 export const paymentEvidenceDirectory = path.join(__dirname, "../../private/payment-evidence");
 mkdirSync(paymentEvidenceDirectory, { recursive: true });
+const uploadKycImages = multer({
+    // Reuse the existing persistent uploads volume; the app blocks public
+    // access to filenames referenced as KYC documents.
+    storage,
+    fileFilter: (_req, file, cb) => {
+        const allowed = /\.(jpeg|jpg|png|webp)$/i.test(path.extname(file.originalname)) && /^image\/(jpeg|png|webp)$/.test(file.mimetype);
+        if (allowed) cb(null, true); else cb(new Error("Only JPEG, PNG, and WebP images are allowed"));
+    },
+    limits: { files: 2, fileSize: 5 * 1024 * 1024 },
+}).array("image", 2);
 const paymentEvidenceStorage = multer.diskStorage({
     destination: paymentEvidenceDirectory,
     filename: (_req, file, cb) => {
@@ -64,6 +74,7 @@ const uploadPaymentEvidence = multer({
     limits: { files: 1, fileSize: 5 * 1024 * 1024 },
 }).single("evidence");
 
-export {uploadImage, uploadProductImages};
+export {uploadImage, uploadProductImages, uploadKycImages};
+export const kycDocumentDirectory = uploadDirectory;
 export { uploadPaymentEvidence };
 export default upload;

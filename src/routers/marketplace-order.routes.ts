@@ -2,6 +2,7 @@ import { Router } from "express";
 import { auth } from "../middleware/auth.middleware";
 import optionalAuth from "../middleware/optional-auth.middleware";
 import paymentEvidence from "../middleware/payment-evidence.middleware";
+import requireAdminStepUp from "../middleware/admin-step-up.middleware";
 import {
   authorizePaymentEvidenceUpload,
   configurePaymentMethods,
@@ -12,6 +13,7 @@ import {
   getPaymentEvidence,
   getPublicPaymentMethods,
   getSellerPaymentMethods,
+  getSellerOrderSummary,
   listDisputes,
   listOrders,
   resolveDispute,
@@ -24,6 +26,7 @@ marketplaceOrderRoutes.get("/marketplace/orders/payment-methods/:shopId", getPub
 marketplaceOrderRoutes.get("/marketplace/orders/track/:orderId", optionalAuth, getOrderForTracking);
 marketplaceOrderRoutes.get("/marketplace/orders/:orderId/suborders/:subOrderId/evidence", optionalAuth, getPaymentEvidence);
 marketplaceOrderRoutes.get("/marketplace/orders/seller/payment-methods", auth, getSellerPaymentMethods);
+marketplaceOrderRoutes.get("/marketplace/orders/seller/summary", auth, getSellerOrderSummary);
 marketplaceOrderRoutes.put("/marketplace/orders/seller/payment-methods", auth, configurePaymentMethods);
 marketplaceOrderRoutes.get("/marketplace/orders/disputes", auth, listDisputes);
 marketplaceOrderRoutes.get("/marketplace/orders", auth, listOrders);
@@ -48,6 +51,7 @@ marketplaceOrderRoutes.patch(
 marketplaceOrderRoutes.patch(
   "/marketplace/orders/:orderId/suborders/:subOrderId/resolve",
   auth,
+  requireAdminStepUp,
   resolveDispute,
 );
 

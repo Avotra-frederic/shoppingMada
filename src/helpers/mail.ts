@@ -123,4 +123,17 @@ export const sendContactEmail = async (
   });
 };
 
+export const sendSupportReply = async (name: string, email: string, subject: string, message: string) => {
+  const escapedName = Handlebars.escapeExpression(name);
+  const escapedMessage = Handlebars.escapeExpression(message).replace(/\r?\n/g, "<br>");
+  await emailSender({
+    from: process.env.EMAIL_USER,
+    to: email,
+    replyTo: process.env.CONTACT_EMAIL?.trim() || process.env.EMAIL_USER?.trim(),
+    subject: `Re: ${subject.slice(0, 160)}`,
+    text: `Bonjour ${name},\n\n${message}\n\n— Support ShopInMada`,
+    html: `<p>Bonjour ${escapedName},</p><p>${escapedMessage}</p><p>— Support ShopInMada</p>`,
+  });
+};
+
 export default sendEmail;

@@ -10,6 +10,7 @@ const userGroupMemberSheme = new Schema<IUserGroupMember>({
         type : Schema.Types.ObjectId,
         ref: "User"
     }
+    ,adminPermissions: { type: [String], enum: ["support.read", "support.reply", "support.manage", "moderation.review", "finance.read", "finance.refund", "finance.payout"], default: [] }
 })
 
 const UserGroupMember = models.UserGroupMember || model("UserGroupMember", userGroupMemberSheme);

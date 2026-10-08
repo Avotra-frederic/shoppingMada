@@ -51,6 +51,9 @@ const BoutiksSheme = new Schema({
         enum: ["free", "pro"],
         default: "free"
     },
+    commissionPercent: { type: Number, min: 0, max: 50, default: 0 },
+    payoutStatus: { type: String, enum: ["manual", "pending", "paid"], default: "manual" },
+    payoutReference: { type: String, maxlength: 120 },
     subscription_id:{
         type:Schema.Types.ObjectId,
         ref:"Subscription"

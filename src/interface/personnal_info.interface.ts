@@ -11,6 +11,10 @@ export default interface IPersonalInfo extends Document
     owner_id?: Types.ObjectId | string;
     frontImage?: string;
     backImage?: string;
+    verificationStatus?: "not_submitted" | "pending" | "approved" | "rejected";
+    verificationReason?: string;
+    reviewedAt?: Date;
+    reviewedBy?: Types.ObjectId | string;
 }
 
 export type LeanPersonnalInfo = Omit<IPersonalInfo, "_id"> & {_id:Types.ObjectId};

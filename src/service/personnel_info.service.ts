@@ -102,7 +102,7 @@ const completPersonnalInfo = async (id: string, data: Partial<IPersonalInfo>): P
   try {
     const personnalInfo = await PersonnalInfo.findOneAndUpdate(
       { owner_id: id },
-      { $set: { ...data, owner_id: id } },
+      { $set: { ...data, owner_id: id, verificationStatus: "pending", verificationReason: "", reviewedAt: null, reviewedBy: null } },
       { new: true, runValidators: true, upsert: true, setDefaultsOnInsert: true },
     ).lean<IPersonalInfo>();
     return personnalInfo ? personnalInfo : null;
@@ -110,6 +110,27 @@ const completPersonnalInfo = async (id: string, data: Partial<IPersonalInfo>): P
     throw error;
   }
 };
+
+const listKycSubmissions = async (status?: string, page = 1, limit = 25) => {
+  const filter: FilterQuery<IPersonalInfo> = {
+    cin: { $exists: true, $ne: "" },
+    frontImage: { $exists: true, $ne: "" },
+    backImage: { $exists: true, $ne: "" },
+    ...(status === "pending" ? { $or: [{ verificationStatus: "pending" }, { verificationStatus: { $exists: false } }] } : status ? { verificationStatus: status } : {}),
+  };
+  const [data, total] = await Promise.all([PersonnalInfo.find(filter)
+    .populate("owner_id", "username email phonenumber boutiks_id userGroupMember_id")
+    .sort({ updatedAt: -1 })
+    .skip((page - 1) * limit).limit(limit).lean(), PersonnalInfo.countDocuments(filter)]);
+  return { data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
+};
+
+const reviewKycSubmission = async (id: string, reviewerId: string, status: "approved" | "rejected", reason: string) =>
+  PersonnalInfo.findOneAndUpdate({ _id: id, $or: [{ verificationStatus: "pending" }, { verificationStatus: { $exists: false } }] }, {
+    $set: { verificationStatus: status, verificationReason: reason, reviewedAt: new Date(), reviewedBy: reviewerId },
+  }, { new: true, runValidators: true })
+    .populate("owner_id", "username email phonenumber boutiks_id")
+    .lean();
 
 const removePersonnalInfo = async (id: string): Promise<IPersonalInfo | null> => {
   try {
@@ -127,6 +148,8 @@ export {
     get_personnal_info_by_owner_id,
     search_personnal_info,
     completPersonnalInfo,
+    listKycSubmissions,
+    reviewKycSubmission,
     removePersonnalInfo
 };
 

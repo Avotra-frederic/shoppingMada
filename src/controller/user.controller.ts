@@ -23,6 +23,8 @@ import {
 } from "../service/user_group_member.service";
 import sendEmail from "../helpers/mail";
 import { updateBoutiks } from "../service/boutiks.service";
+import { recordAdminAction } from "../service/admin-audit.service";
+import User from "../model/user.model";
 
 const storeUser = expressAsyncHandler(async (req: Request, res: Response) => {
   const credentials = {
@@ -167,7 +169,9 @@ const login = expressAsyncHandler(async (req: Request, res: Response) => {
 const regenerateToken = expressAsyncHandler(
   async (req: Request, res: Response) => {
     const user = (req as any).user;
-    const updatedUser = await getUser(user._id);
+      const impersonation = (req as any).impersonation;
+      const baseUser = (req as any).baseUser;
+      const updatedUser = await getUser(impersonation ? baseUser._id : user._id);
 
     if (!updatedUser) {
       res
@@ -176,7 +180,7 @@ const regenerateToken = expressAsyncHandler(
       return;
     }
 
-    const { password, ...authUser } = updatedUser;
+      const { password, ...authUser } = updatedUser;
     const token = jwt.sign(authUser, process.env.TOKEN_SECRET as string, {
       expiresIn: "1h",
     });
@@ -190,7 +194,7 @@ const regenerateToken = expressAsyncHandler(
     res.status(201).json({
       status: "Success",
         message: "La session a été renouvelée.",
-      userInfo: authUser,
+        userInfo: impersonation ? { ...user, impersonation: { active: true, actorName: impersonation.actorName, expiresInSeconds: 900 } } : authUser,
     });
   },
 );
@@ -353,7 +357,36 @@ const all = expressAsyncHandler(async (req: Request, res: Response) => {
     res.status(403).json({ status: "Failed", message: "Accès réservé à l'administration" });
     return;
   }
-  const users = await getAllUser();
+    const isPaginated = Boolean(req.query.page || req.query.limit || req.query.q || req.query.role || req.query.status);
+    if (isPaginated) {
+      const page = Math.max(1, Number.parseInt(String(req.query.page ?? "1"), 10) || 1);
+      const limit = Math.min(100, Math.max(1, Number.parseInt(String(req.query.limit ?? "20"), 10) || 20));
+      const conditions: any[] = [];
+      if (typeof req.query.q === "string" && req.query.q.trim()) {
+        const q = req.query.q.trim().slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const shops = await (await import("../model/boutiks.model")).default.find({ name: { $regex: q, $options: "i" } }).distinct("owner_id");
+        const groups = await (await import("../model/userGroup.model")).default.find({ name: { $regex: q, $options: "i" } }).distinct("_id");
+        const members = await (await import("../model/userGroupMember.model")).default.find({ usergroup_id: { $in: groups } }).distinct("_id");
+        conditions.push({ $or: [{ username: { $regex: q, $options: "i" } }, { email: { $regex: q, $options: "i" } }, { phonenumber: { $regex: q, $options: "i" } }, { _id: { $in: shops } }, { userGroupMember_id: { $in: members } }] });
+      }
+      if (typeof req.query.role === "string" && req.query.role !== "all") {
+        if (req.query.role === "disabled") conditions.push({ $or: [{ userGroupMember_id: { $exists: false } }, { userGroupMember_id: null }] });
+        else {
+          const group = await (await import("../model/userGroup.model")).default.findOne({ name: req.query.role }).select("_id").lean<any>();
+          const members = group ? await (await import("../model/userGroupMember.model")).default.find({ usergroup_id: group._id }).distinct("_id") : [];
+          conditions.push({ userGroupMember_id: { $in: members } });
+        }
+      }
+      if (req.query.status === "active") conditions.push({ userGroupMember_id: { $exists: true, $ne: null } });
+      if (req.query.status === "inactive") conditions.push({ $or: [{ userGroupMember_id: { $exists: false } }, { userGroupMember_id: null }] });
+      const filter: any = conditions.length ? { $and: conditions } : {};
+      const [rows, total] = await Promise.all([User.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean<any[]>().populate({ path: "boutiks_id", populate: { path: "subscription_id" } }).populate({ path: "userGroupMember_id", populate: { path: "usergroup_id" } }).populate("personnalInfo_id"), User.countDocuments(filter)]);
+      const data = rows.map(({ password: _password, ...safe }: any) => safe);
+      const roleStats = await User.aggregate([{ $lookup: { from: "usergroupmembers", localField: "userGroupMember_id", foreignField: "_id", as: "member" } }, { $unwind: { path: "$member", preserveNullAndEmptyArrays: true } }, { $lookup: { from: "usergroups", localField: "member.usergroup_id", foreignField: "_id", as: "group" } }, { $unwind: { path: "$group", preserveNullAndEmptyArrays: true } }, { $group: { _id: "$group.name", count: { $sum: 1 } } }]);
+      res.status(200).json({ status: "Success", data, pagination: { page, limit, total, pages: Math.ceil(total / limit) }, stats: { total: roleStats.reduce((sum: number, item: any) => sum + item.count, 0), sellers: roleStats.find((item: any) => item._id === "Boutiks")?.count ?? 0, clients: roleStats.find((item: any) => item._id === "Client")?.count ?? 0, active: roleStats.filter((item: any) => item._id).reduce((sum: number, item: any) => sum + item.count, 0) } });
+      return;
+    }
+    const users = await getAllUser();
   if (!users) {
     res.status(400).json({ status: "Failed", message: "Impossible de récupérer les utilisateurs." });
     return;
@@ -417,6 +450,7 @@ const blockAccount = expressAsyncHandler(
         .json({ status: "Failed", message: "Utilisateur introuvable dans son groupe." });
       return;
     }
+    await recordAdminAction({ actorId: String(requester._id), actorName: requester.username ?? "Super Admin", action: "account.suspended", targetType: "user", targetId: String(target._id), targetLabel: target.username, reason: String(req.body?.reason ?? "").slice(0, 500), ip: req.ip });
     res.status(201).json({
       status: "Success",
         message: "Le compte a été désactivé.",
@@ -456,6 +490,7 @@ const activeAccount = expressAsyncHandler(
             }
           }
         }
+        if (member) await recordAdminAction({ actorId: String((req as any).user._id), actorName: (req as any).user.username ?? "Super Admin", action: "account.reactivated", targetType: "user", targetId: String(user._id), targetLabel: user.username, ip: req.ip });
         res
           .status(201)
           .json({ status: "Success", message: "Le compte a été réactivé." });
@@ -470,6 +505,7 @@ const activeAccount = expressAsyncHandler(
         };
         const member = await add_user_in_user_group(addUserIntoUserGroup as IUserGroupMember);
         if (member) await updateUser(id, { userGroupMember_id: member._id } as IUser);
+        if (member) await recordAdminAction({ actorId: String((req as any).user._id), actorName: (req as any).user.username ?? "Super Admin", action: "account.reactivated", targetType: "user", targetId: String(user._id), targetLabel: user.username, ip: req.ip });
         res
           .status(201)
           .json({ status: "Success", message: "Le compte a été réactivé." });
@@ -526,6 +562,8 @@ const changeUserGroupToAdmin = expressAsyncHandler(
 
     await updateUser(id, { userGroupMember_id: newUserGroup._id } as IUser);
 
+    await recordAdminAction({ actorId: String(user._id), actorName: user.username ?? "Super Admin", action: "account.promoted_super_admin", targetType: "user", targetId: String(id), targetLabel: (await getUser(id))?.username ?? "", reason: String(req.body?.reason ?? "").slice(0, 500), ip: req.ip });
+
     res
       .status(201)
       .json({ status: "Success", message: "La modification a été effectuée." });
@@ -549,7 +587,8 @@ const authVerify = expressAsyncHandler(async (req: Request, res: Response) => {
     // Évite d'envoyer le mot de passe
     const { password, ...safeUser } = user;
 
-    res.status(200).json({ userInfo: safeUser });
+      const impersonation = (req as any).impersonation;
+      res.status(200).json({ userInfo: impersonation ? { ...safeUser, impersonation: { active: true, actorName: impersonation.actorName, expiresInSeconds: 900 } } : safeUser });
   } catch (err) {
     console.error("Erreur lors de la vérification de la session :", err);
     res.status(500).json({ message: "Une erreur interne est survenue." });

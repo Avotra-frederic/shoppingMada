@@ -6,6 +6,7 @@ import {
   addCommande,
   deleteCommande,
   getBoutiksCommand,
+  listBoutiksCommand,
   getClientCommand,
   getCommandeById,
   updateStatus,
@@ -43,6 +44,17 @@ const getAllCommand = expressAsyncHandler(async (req: Request, res: Response) =>
   const role = await get_user_group_name({ user_id: user._id });
   if (role === "Boutiks") {
     const shop = await findBoutiks(user._id);
+    if (req.query.page !== undefined || req.query.limit !== undefined || req.query.status !== undefined) {
+      const page = Math.max(1, Number.parseInt(String(req.query.page ?? "1"), 10) || 1);
+      const limit = Math.min(100, Math.max(1, Number.parseInt(String(req.query.limit ?? "20"), 10) || 20));
+      const status = typeof req.query.status === "string" ? req.query.status : "all";
+      if (!shop || !(status === "all" || ["Pending", "Accepted", "Rejected", "Canceled"].includes(status))) {
+        res.status(shop ? 400 : 404).json({ status: "Failed", message: shop ? "Filtre de statut invalide." : "Boutique introuvable." });
+        return;
+      }
+      res.status(200).json({ status: "Success", ...(await listBoutiksCommand(String(shop._id), { page, limit, status })) });
+      return;
+    }
     res.status(200).json({ status: "Success", data: shop ? await getBoutiksCommand(String(shop._id)) ?? [] : [] });
     return;
   }
