@@ -278,15 +278,25 @@ const getSeller360 = expressAsyncHandler(async (req: Request, res: Response) => 
   if (!Types.ObjectId.isValid(req.params.sellerId)) { res.status(400).json({ status: "Failed", message: "Identifiant vendeur invalide." }); return; }
   const shop = await Boutiks.findOne({ $or: [{ _id: req.params.sellerId }, { owner_id: req.params.sellerId }] }).populate("subscription_id").populate("owner_id", "username email phonenumber").lean<any>();
   if (!shop) { res.status(404).json({ status: "Failed", message: "Boutique introuvable." }); return; }
-  const [kyc, productCount, orders, audit] = await Promise.all([
+  const [kyc, publicationGroups, recentProducts, orders, audit, subscriptionHistory] = await Promise.all([
     PersonnalInfo.findOne({ owner_id: shop.owner_id?._id ?? shop.owner_id }).select("verificationStatus verificationReason reviewedAt").lean(),
-    Product.countDocuments({ boutiks_id: shop._id }),
+    Product.aggregate([{ $match: { boutiks_id: shop._id } }, { $group: { _id: "$publicationStatus", count: { $sum: 1 } } }]),
+    Product.find({ boutiks_id: shop._id }).select("name price stock publicationStatus moderationReason createdAt updatedAt").sort({ createdAt: -1 }).limit(8).lean(),
     MarketplaceOrder.find({ "subOrders.boutiks_id": shop._id }).sort({ createdAt: -1 }).limit(10).select("customer subOrders createdAt").lean(),
     AdminAudit.find({ targetId: String(shop.owner_id?._id ?? shop.owner_id) }).sort({ createdAt: -1 }).limit(20).lean(),
+    Subscription.find({ owner_id: shop.owner_id?._id ?? shop.owner_id }).select("plan priceMGA startDate endDate payementStatus lifecycleStatus cancelAtPeriodEnd canceledAt graceUntil autoRenew refundedMGA paymentCompletedAt createdAt").sort({ createdAt: -1 }).limit(6).lean(),
   ]);
+  const publications = { total: 0, approved: 0, pending: 0, rejected: 0 };
+  for (const row of publicationGroups) {
+    const count = Number(row.count) || 0;
+    publications.total += count;
+    if (row._id === "Approved") publications.approved = count;
+    else if (row._id === "Rejected") publications.rejected = count;
+    else publications.pending += count;
+  }
   const sellerId = String(shop.owner_id?._id ?? shop.owner_id);
   const [role] = await Promise.all([UserGroupMember.findOne({ user_id: sellerId }).populate("usergroup_id").lean<any>()]);
-  res.status(200).json({ status: "Success", data: { shop, kyc, productCount, orders: orders.map((order: any) => ({ ...order, subOrders: order.subOrders.filter((line: any) => String(line.boutiks_id) === String(shop._id)) })), audit, role: role?.usergroup_id?.name ?? "Boutiks" } });
+  res.status(200).json({ status: "Success", data: { shop, kyc, productCount: publications.total, publications, recentProducts, subscriptionHistory, orders: orders.map((order: any) => ({ ...order, subOrders: order.subOrders.filter((line: any) => String(line.boutiks_id) === String(shop._id)) })), audit, role: role?.usergroup_id?.name ?? "Boutiks" } });
 });
 
 const updateSellerCommission = expressAsyncHandler(async (req: Request, res: Response) => {

@@ -382,8 +382,11 @@ const all = expressAsyncHandler(async (req: Request, res: Response) => {
       const filter: any = conditions.length ? { $and: conditions } : {};
       const [rows, total] = await Promise.all([User.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean<any[]>().populate({ path: "boutiks_id", populate: { path: "subscription_id" } }).populate({ path: "userGroupMember_id", populate: { path: "usergroup_id" } }).populate("personnalInfo_id"), User.countDocuments(filter)]);
       const data = rows.map(({ password: _password, ...safe }: any) => safe);
-      const roleStats = await User.aggregate([{ $lookup: { from: "usergroupmembers", localField: "userGroupMember_id", foreignField: "_id", as: "member" } }, { $unwind: { path: "$member", preserveNullAndEmptyArrays: true } }, { $lookup: { from: "usergroups", localField: "member.usergroup_id", foreignField: "_id", as: "group" } }, { $unwind: { path: "$group", preserveNullAndEmptyArrays: true } }, { $group: { _id: "$group.name", count: { $sum: 1 } } }]);
-      res.status(200).json({ status: "Success", data, pagination: { page, limit, total, pages: Math.ceil(total / limit) }, stats: { total: roleStats.reduce((sum: number, item: any) => sum + item.count, 0), sellers: roleStats.find((item: any) => item._id === "Boutiks")?.count ?? 0, clients: roleStats.find((item: any) => item._id === "Client")?.count ?? 0, active: roleStats.filter((item: any) => item._id).reduce((sum: number, item: any) => sum + item.count, 0) } });
+      const [roleStats, disabled] = await Promise.all([
+        User.aggregate([{ $lookup: { from: "usergroupmembers", localField: "userGroupMember_id", foreignField: "_id", as: "member" } }, { $unwind: { path: "$member", preserveNullAndEmptyArrays: true } }, { $lookup: { from: "usergroups", localField: "member.usergroup_id", foreignField: "_id", as: "group" } }, { $unwind: { path: "$group", preserveNullAndEmptyArrays: true } }, { $group: { _id: "$group.name", count: { $sum: 1 } } }]),
+        User.countDocuments({ $or: [{ userGroupMember_id: { $exists: false } }, { userGroupMember_id: null }] }),
+      ]);
+      res.status(200).json({ status: "Success", data, pagination: { page, limit, total, pages: Math.ceil(total / limit) }, stats: { total: roleStats.reduce((sum: number, item: any) => sum + item.count, 0), sellers: roleStats.find((item: any) => item._id === "Boutiks")?.count ?? 0, clients: roleStats.find((item: any) => item._id === "Client")?.count ?? 0, admins: roleStats.find((item: any) => item._id === "Super Admin")?.count ?? 0, disabled, active: roleStats.filter((item: any) => item._id).reduce((sum: number, item: any) => sum + item.count, 0) } });
       return;
     }
     const users = await getAllUser();
