@@ -44,6 +44,11 @@ const sendNewSubscription = expressAsyncHandler(async (req: Request, res: Respon
     res.status(400).json({ status: "Failed", message: "Ce moyen de paiement n’est plus disponible." });
     return;
   }
+  const pendingRequest = await Subscription.findOne({ owner_id: user._id, payementStatus: "Pending" }).select("_id").lean();
+  if (pendingRequest) {
+    res.status(409).json({ status: "Failed", message: "Une demande d’abonnement est déjà en attente pour cette boutique." });
+    return;
+  }
   const paymentConfiguration = await getSubscriptionPaymentMethods(true);
   const planConfiguration: any = await SubscriptionPlan.findOne({ key: String(plan).toLowerCase(), active: true }).lean();
   const subscription = await createNewSubscription({
@@ -230,22 +235,48 @@ const getSubscriptionList = expressAsyncHandler(async (req: Request, res: Respon
     res.status(200).json({ status: "Success", data: subscription });
     return;
   }
-  if (roleOf(user) === "Super Admin") {
+  if (roleOf(user) === "Super Admin" || roleOf(user) === "Boutiks") {
     if (req.query.page || req.query.limit || req.query.status || req.query.q) {
       const page = Math.max(1, Number.parseInt(String(req.query.page ?? "1"), 10) || 1);
       const limit = Math.min(100, Math.max(1, Number.parseInt(String(req.query.limit ?? "20"), 10) || 20));
-      const filter: any = {};
-      if (typeof req.query.status === "string" && ["Pending", "Completed", "Rejected", "Canceled"].includes(req.query.status)) filter.payementStatus = req.query.status;
+      const match: any = roleOf(user) === "Boutiks" ? { owner_id: user._id } : {};
+      const latestStatus = typeof req.query.status === "string" && ["Pending", "Completed", "Rejected", "Canceled"].includes(req.query.status) ? req.query.status : null;
       if (typeof req.query.q === "string" && req.query.q.trim()) {
         const safe = req.query.q.trim().slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
         const UserModel = (await import("../model/user.model")).default;
         const [users, shops] = await Promise.all([UserModel.find({ $or: [{ username: { $regex: safe, $options: "i" } }, { email: { $regex: safe, $options: "i" } }] }).distinct("_id"), (await import("../model/boutiks.model")).default.find({ name: { $regex: safe, $options: "i" } }).distinct("owner_id")]);
-        filter.$or = [{ refTransaction: { $regex: safe, $options: "i" } }, { owner_id: { $in: [...users, ...shops] } }];
+        match.$or = [{ refTransaction: { $regex: safe, $options: "i" } }, { owner_id: { $in: [...users, ...shops] } }];
       }
-      const [data, total, counts] = await Promise.all([Subscription.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean().populate({ path: "owner_id", populate: { path: "boutiks_id" } }), Subscription.countDocuments(filter), Subscription.aggregate([{ $group: { _id: "$payementStatus", count: { $sum: 1 } } }])]);
+      const latestBySeller: any[] = [
+        { $match: match },
+        { $sort: { createdAt: -1, _id: -1 } },
+        { $group: { _id: { $ifNull: ["$owner_id", "$_id"] }, latest: { $first: "$$ROOT" } } },
+        { $replaceRoot: { newRoot: "$latest" } },
+      ];
+      const [pageResult, counts] = await Promise.all([
+        Subscription.aggregate([
+          ...latestBySeller,
+          ...(latestStatus ? [{ $match: { payementStatus: latestStatus } }] : []),
+          { $sort: { createdAt: -1, _id: -1 } },
+          { $facet: { data: [{ $skip: (page - 1) * limit }, { $limit: limit }, { $project: { _id: 1 } }], total: [{ $count: "value" }] } },
+        ]),
+        Subscription.aggregate([
+          ...(roleOf(user) === "Boutiks" ? [{ $match: { owner_id: user._id } }] : []),
+          { $sort: { createdAt: -1, _id: -1 } },
+          { $group: { _id: { $ifNull: ["$owner_id", "$_id"] }, latestStatus: { $first: "$payementStatus" } } },
+          { $group: { _id: "$latestStatus", count: { $sum: 1 } } },
+        ]),
+      ]);
+      const ids = (pageResult[0]?.data ?? []).map((item: any) => item._id);
+      const populated = ids.length ? await Subscription.find({ _id: { $in: ids } }).lean().populate({ path: "owner_id", populate: { path: "boutiks_id" } }) : [];
+      const byId = new Map(populated.map((item: any) => [String(item._id), item]));
+      const data = ids.map((id: any) => byId.get(String(id))).filter(Boolean);
+      const total = pageResult[0]?.total?.[0]?.value ?? 0;
       res.status(200).json({ status: "Success", data, pagination: { page, limit, total, pages: Math.ceil(total / limit) }, stats: Object.fromEntries(counts.map((item: any) => [item._id, item.count])) });
       return;
     }
+  }
+  if (roleOf(user) === "Super Admin") {
     res.status(200).json({ status: "Success", data: await getSubscription() });
     return;
   }

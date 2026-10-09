@@ -262,15 +262,26 @@ const getAdminOperationsOverview = expressAsyncHandler(async (req: Request, res:
   if (!await requireSuperAdmin(req, res)) return;
   const now = new Date();
   const [pendingSubscriptions, disputes, pendingKyc, openTickets, overdueTickets, expiringSubscriptions, unverifiedPayments] = await Promise.all([
-    Subscription.countDocuments({ payementStatus: "Pending" }),
+    Subscription.aggregate([
+      { $sort: { createdAt: -1, _id: -1 } },
+      { $group: { _id: { $ifNull: ["$owner_id", "$_id"] }, latestStatus: { $first: "$payementStatus" } } },
+      { $match: { latestStatus: "Pending" } },
+      { $count: "count" },
+    ]),
     MarketplaceOrder.aggregate([{ $unwind: "$subOrders" }, { $match: { "subOrders.status": "litige" } }, { $count: "count" }]),
     PersonnalInfo.countDocuments({ cin: { $exists: true, $ne: "" }, frontImage: { $exists: true, $ne: "" }, backImage: { $exists: true, $ne: "" }, $or: [{ verificationStatus: "pending" }, { verificationStatus: { $exists: false } }] }),
     ContactTicket.countDocuments({ status: { $ne: "resolved" } }),
     ContactTicket.countDocuments({ status: { $ne: "resolved" }, dueAt: { $lt: now } }),
-    Subscription.countDocuments({ payementStatus: "Completed", cancelAtPeriodEnd: { $ne: true }, endDate: { $gte: now, $lte: new Date(now.getTime() + 30 * 86400000) } }),
+    Boutiks.aggregate([
+      { $match: { isActive: { $ne: false }, subscription_id: { $exists: true, $ne: null } } },
+      { $lookup: { from: Subscription.collection.name, localField: "subscription_id", foreignField: "_id", as: "currentSubscription" } },
+      { $unwind: "$currentSubscription" },
+      { $match: { "currentSubscription.payementStatus": "Completed", "currentSubscription.cancelAtPeriodEnd": { $ne: true }, "currentSubscription.endDate": { $gte: now, $lte: new Date(now.getTime() + 30 * 86400000) } } },
+      { $count: "count" },
+    ]),
     MarketplaceOrder.countDocuments({ "subOrders.status": "paiement_declare" }),
   ]);
-  res.status(200).json({ status: "Success", data: { pendingSubscriptions, openDisputes: disputes[0]?.count ?? 0, pendingKyc, openTickets, overdueTickets, expiringSubscriptions, unverifiedPayments, generatedAt: now } });
+  res.status(200).json({ status: "Success", data: { pendingSubscriptions: pendingSubscriptions[0]?.count ?? 0, openDisputes: disputes[0]?.count ?? 0, pendingKyc, openTickets, overdueTickets, expiringSubscriptions: expiringSubscriptions[0]?.count ?? 0, unverifiedPayments, generatedAt: now } });
 });
 
 const getSeller360 = expressAsyncHandler(async (req: Request, res: Response) => {
