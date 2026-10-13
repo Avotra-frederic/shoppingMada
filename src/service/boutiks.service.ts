@@ -43,7 +43,20 @@ const findBoutiks = async(owner_id: string): Promise<IBoutiks | null> =>{
 }
 
 const getActiveBoutikIds = async (): Promise<string[]> => {
-    const ids = await Boutiks.find({ isActive: { $ne: false } }).distinct("_id");
+    const now = new Date();
+    const Subscription = (await import("../model/abonnement.model")).default;
+    const activeSubscriptions = await Subscription.find({ payementStatus: "Completed", startDate: { $lte: now }, endDate: { $gt: now } }).select("owner_id").lean<any[]>();
+    const graceSubscriptions = await Subscription.find({ payementStatus: "Completed", endDate: { $lte: now }, graceUntil: { $gt: now } }).select("owner_id").lean<any[]>();
+    const paidOwnerIds = [...activeSubscriptions, ...graceSubscriptions].map((subscription) => subscription.owner_id).filter(Boolean);
+    const ids = await Boutiks.find({
+        isActive: { $ne: false },
+        $or: [
+            { freeAccessEndsAt: { $gt: now } },
+            { freeAccessEndsAt: { $exists: false }, freeAccessStartedAt: { $gt: new Date(now.getTime() - 30 * 86400000) } },
+            { freeAccessEndsAt: { $exists: false }, freeAccessStartedAt: { $exists: false }, createdAt: { $gt: new Date(now.getTime() - 30 * 86400000) } },
+            { owner_id: { $in: paidOwnerIds } },
+        ],
+    }).distinct("_id");
     return ids.map((id) => String(id));
 }
 

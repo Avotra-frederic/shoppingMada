@@ -85,7 +85,7 @@ const requireSuperAdmin = async (req: Request, res: Response) => {
 
 const requestAdminStepUp = expressAsyncHandler(async (req: Request, res: Response) => {
   const actor = (req as any).user;
-  const canConfirmAdminActions = ["moderation.review", "support.manage", "finance.refund", "finance.payout"].some((permission) => hasAdminPermission(actor, permission));
+  const canConfirmAdminActions = actor?.userGroupMember_id?.usergroup_id?.name === "Super Admin" || ["moderation.review", "support.manage", "finance.refund", "finance.payout"].some((permission) => hasAdminPermission(actor, permission));
   if (!canConfirmAdminActions) {
     res.status(403).json({ status: "Failed", message: "Un rôle administratif autorisé est requis." });
     return;
@@ -138,8 +138,10 @@ const verifyAdminStepUp = expressAsyncHandler(async (req: Request, res: Response
 });
 
 const seedPlans = async () => {
-  await SubscriptionPlan.updateOne({ key: "free" }, { $setOnInsert: { name: "Gratuit", monthlyPriceMGA: 0, durationDays: 30, graceDays: 3, maxProducts: 0, features: { advancedAnalytics: false, prioritySupport: false, customCategories: false }, active: true } }, { upsert: true });
-  await SubscriptionPlan.updateOne({ key: "pro" }, { $setOnInsert: { name: "Pro", monthlyPriceMGA: 0, durationDays: 30, graceDays: 3, maxProducts: 0, features: { advancedAnalytics: false, prioritySupport: false, customCategories: false }, active: true } }, { upsert: true });
+  await SubscriptionPlan.updateOne({ key: "free" }, { $setOnInsert: { name: "Gratuit", monthlyPriceMGA: 0, durationDays: 30, graceDays: 7, maxProducts: 20, trialEnabled: false, trialDurationDays: 30, trialMaxProducts: 20, features: { advancedAnalytics: false, prioritySupport: false, customCategories: false }, active: true } }, { upsert: true });
+  await SubscriptionPlan.updateOne({ key: "pro" }, { $setOnInsert: { name: "Pro", monthlyPriceMGA: 0, durationDays: 30, graceDays: 7, maxProducts: 500, features: { advancedAnalytics: true, prioritySupport: true, customCategories: true }, active: true } }, { upsert: true });
+  await SubscriptionPlan.updateOne({ key: "enterprise" }, { $setOnInsert: { name: "Entreprise", monthlyPriceMGA: 0, durationDays: 30, graceDays: 7, maxProducts: 0, features: { advancedAnalytics: true, prioritySupport: true, customCategories: true }, active: false } }, { upsert: true });
+  await SubscriptionPlan.updateOne({ key: "pro" }, { $setOnInsert: { maxProducts: 500, features: { advancedAnalytics: true, prioritySupport: true, customCategories: true } } });
 };
 
 const listAdminPlans = expressAsyncHandler(async (req: Request, res: Response) => {
@@ -151,13 +153,22 @@ const listAdminPlans = expressAsyncHandler(async (req: Request, res: Response) =
 const updateAdminPlan = expressAsyncHandler(async (req: Request, res: Response) => {
   if (!await requireSuperAdmin(req, res)) return;
   const { key } = req.params; const body = req.body ?? {};
-  if (!["free", "pro"].includes(key) || typeof body.name !== "string" || !body.name.trim() || !Number.isSafeInteger(body.monthlyPriceMGA) || body.monthlyPriceMGA < 0 || body.monthlyPriceMGA > 1000000000 || !Number.isInteger(body.durationDays) || body.durationDays < 1 || body.durationDays > 366 || !Number.isInteger(body.graceDays) || body.graceDays < 0 || body.graceDays > 30 || !Number.isInteger(body.maxProducts) || body.maxProducts < 0 || body.maxProducts > 1000000 || typeof body.active !== "boolean" || !body.features || ["advancedAnalytics", "prioritySupport", "customCategories"].some((feature) => typeof body.features[feature] !== "boolean")) {
+  if (key === "free" && (typeof body.trialEnabled !== "boolean" || ![30, 60].includes(body.trialDurationDays) || !Number.isInteger(body.trialMaxProducts) || body.trialMaxProducts < 0 || body.trialMaxProducts > 1000000)) { res.status(400).json({ status: "Failed", message: "La configuration de l’offre gratuite temporaire est invalide." }); return; }
+  if (!["free", "pro", "enterprise"].includes(key) || typeof body.name !== "string" || !body.name.trim() || !Number.isSafeInteger(body.monthlyPriceMGA) || body.monthlyPriceMGA < 0 || body.monthlyPriceMGA > 1000000000 || !Number.isInteger(body.durationDays) || body.durationDays < 1 || body.durationDays > 366 || !Number.isInteger(body.graceDays) || body.graceDays < 0 || body.graceDays > 30 || !Number.isInteger(body.maxProducts) || body.maxProducts < 0 || body.maxProducts > 1000000 || (key === "free" && (body.monthlyPriceMGA !== 0 || (body.maxProducts === 0 && !(body.trialEnabled && body.trialMaxProducts === 0)) || body.maxProducts > 100)) || (key === "pro" && (body.maxProducts === 0 || body.maxProducts > 5000)) || (key === "enterprise" && body.maxProducts !== 0) || typeof body.active !== "boolean" || (key === "free" && !body.active) || !body.features || ["advancedAnalytics", "prioritySupport", "customCategories"].some((feature) => typeof body.features[feature] !== "boolean")) {
     res.status(400).json({ status: "Failed", message: "Configuration du forfait invalide." }); return;
   }
-  const data = await SubscriptionPlan.findOneAndUpdate({ key }, { $set: { name: body.name.trim().slice(0, 80), monthlyPriceMGA: body.monthlyPriceMGA, durationDays: body.durationDays, graceDays: body.graceDays, maxProducts: body.maxProducts, active: body.active, features: body.features } }, { upsert: true, new: true, runValidators: true }).lean();
+  const safeFeatures = key === "free" ? { advancedAnalytics: false, prioritySupport: false, customCategories: false } : body.features;
+  const quota = key === "enterprise" || (key === "free" && body.trialEnabled) ? 0 : body.maxProducts;
+  const freeOffer = key === "free" ? { trialEnabled: body.trialEnabled, trialDurationDays: body.trialDurationDays, trialMaxProducts: body.trialMaxProducts } : {};
+  const existingPlan: any = await SubscriptionPlan.findOne({ key }).select("monthlyPriceMGA").lean();
+  const effectivePrice = key === "pro" && Number(body.monthlyPriceMGA) === 0 && Number(existingPlan?.monthlyPriceMGA) > 0 ? existingPlan.monthlyPriceMGA : body.monthlyPriceMGA;
+  const data = await SubscriptionPlan.findOneAndUpdate({ key }, { $set: { name: body.name.trim().slice(0, 80), monthlyPriceMGA: effectivePrice, durationDays: body.durationDays, graceDays: body.graceDays, maxProducts: quota, active: body.active, features: safeFeatures, ...freeOffer } }, { upsert: true, new: true, runValidators: true }).lean();
   if (key === "pro") {
     const currentPayments = await getSubscriptionPaymentMethods();
-    await saveSubscriptionPaymentMethods(currentPayments.methods, body.monthlyPriceMGA);
+    await saveSubscriptionPaymentMethods(currentPayments.methods, effectivePrice);
+  }
+  if (key === "enterprise" && body.active) {
+    await SubscriptionPlan.updateOne({ key: "pro" }, { $set: { active: false } });
   }
   const actor = (req as any).user;
   await recordAdminAction({ actorId: String(actor._id), actorName: actor.username ?? "Super Admin", action: "subscription.plan.updated", targetType: "subscription-plan", targetId: key, targetLabel: (data as any)?.name ?? key, reason: "Règles commerciales mises à jour", ip: req.ip });
@@ -168,14 +179,20 @@ const getSellerEntitlements = expressAsyncHandler(async (req: Request, res: Resp
   const user = (req as any).user;
   const boutik = await Boutiks.findOne({ owner_id: user._id }).populate("subscription_id").lean<any>();
   if (!boutik) { res.status(404).json({ status: "Failed", message: "Boutique introuvable." }); return; }
-  const subscription = boutik.subscription_id;
-  const withinGrace = subscription?.lifecycleStatus === "grace" && subscription.graceUntil && new Date(subscription.graceUntil).getTime() > Date.now();
-  const planKey = subscription?.payementStatus === "Completed" && ((subscription.endDate && new Date(subscription.endDate).getTime() > Date.now()) || withinGrace) ? "pro" : "free";
+  await SubscriptionPlan.updateOne({ key: "free" }, { $setOnInsert: { name: "Gratuit", monthlyPriceMGA: 0, durationDays: 30, graceDays: 7, maxProducts: 20, trialEnabled: false, trialDurationDays: 30, trialMaxProducts: 20, features: { advancedAnalytics: false, prioritySupport: false, customCategories: false }, active: true } }, { upsert: true });
+  const activeSubscription: any = await Subscription.findOne({ owner_id: user._id, payementStatus: "Completed", startDate: { $lte: new Date() }, endDate: { $gt: new Date() } }).sort({ endDate: -1 }).lean();
+  const scheduledSubscription: any = !activeSubscription ? await Subscription.findOne({ owner_id: user._id, payementStatus: "Completed", startDate: { $gt: new Date() }, endDate: { $gt: new Date() } }).sort({ startDate: 1 }).lean() : null;
+  const inGraceSubscription: any = !activeSubscription && !scheduledSubscription ? await Subscription.findOne({ owner_id: user._id, payementStatus: "Completed", endDate: { $lte: new Date() }, graceUntil: { $gt: new Date() }, cancelAtPeriodEnd: { $ne: true } }).sort({ graceUntil: -1 }).lean() : null;
+  const effectiveSubscription = activeSubscription ?? inGraceSubscription ?? scheduledSubscription;
+  const planKey = effectiveSubscription ? String(effectiveSubscription.plan).toLowerCase() : "free";
   await seedPlans();
   const plan = await SubscriptionPlan.findOne({ key: planKey, active: true }).lean<any>();
   const Product = (await import("../model/product.model")).default;
   const [used, lowStock] = await Promise.all([Product.countDocuments({ boutiks_id: boutik._id }), Product.countDocuments({ boutiks_id: boutik._id, stock: { $lte: 5 } })]);
-  res.status(200).json({ status: "Success", data: { plan: planKey, name: plan?.name ?? planKey, quota: plan?.maxProducts ?? 0, used, remaining: plan?.maxProducts ? Math.max(0, plan.maxProducts - used) : null, lowStock, features: plan?.features ?? {} } });
+  const freeAccessEndsAt = boutik.freeAccessEndsAt ?? new Date(new Date(boutik.freeAccessStartedAt ?? boutik.createdAt).getTime() + 30 * 86400000);
+  const promotionalFreeAccess = !effectiveSubscription && new Date(freeAccessEndsAt).getTime() > Date.now();
+  const freeQuota = promotionalFreeAccess ? Number(boutik.freeProductQuota ?? plan?.maxProducts ?? 20) : Number(plan?.maxProducts ?? 20);
+  res.status(200).json({ status: "Success", data: { plan: planKey, name: promotionalFreeAccess ? `${plan?.name ?? "Gratuit"} · promotion` : plan?.name ?? planKey, quota: effectiveSubscription ? Number(plan?.maxProducts ?? 20) : freeQuota, used, remaining: effectiveSubscription && plan?.maxProducts === 0 || promotionalFreeAccess && freeQuota === 0 ? null : Math.max(0, freeQuota - used), lowStock, features: plan?.features ?? {}, lifecycleStatus: inGraceSubscription ? "grace" : scheduledSubscription && !activeSubscription ? "scheduled" : promotionalFreeAccess ? "free-promotion" : effectiveSubscription ? "active" : planKey !== "free" ? "subscription-expired" : "free-expired", periodEnd: effectiveSubscription?.endDate ?? null, graceUntil: inGraceSubscription?.graceUntil ?? null, freeAccessEndsAt } });
 });
 
 const startSellerImpersonation = expressAsyncHandler(async (req: Request, res: Response) => {
@@ -413,7 +430,7 @@ const exportAdminData = expressAsyncHandler(async (req: Request, res: Response) 
 
 const listAdminStaff = expressAsyncHandler(async (req: Request, res: Response) => {
   if (!await requireSuperAdmin(req, res)) return;
-  const groups = await UserGroup.find({ name: { $in: ["Support", "Moderator", "Finance", "Read Only"] } }).select("_id name").lean<any[]>();
+  const groups = await UserGroup.find({ name: { $in: ["Admin", "Support", "Moderator", "Finance", "Read Only"] } }).select("_id name").lean<any[]>();
   const groupById = new Map(groups.map((group) => [String(group._id), group.name]));
   const rows = await UserGroupMember.find({ usergroup_id: { $in: groups.map((group) => group._id) } }).populate("user_id", "username email").lean<any[]>();
   res.status(200).json({ status: "Success", data: rows.map((row) => ({ userId: row.user_id?._id, username: row.user_id?.username, email: row.user_id?.email, role: groupById.get(String(row.usergroup_id)), permissions: row.adminPermissions ?? [] })) });
@@ -421,15 +438,16 @@ const listAdminStaff = expressAsyncHandler(async (req: Request, res: Response) =
 
 const setAdminStaffRole = expressAsyncHandler(async (req: Request, res: Response) => {
   if (!await requireSuperAdmin(req, res)) return;
-  const { role, permissions } = req.body ?? {};
-  const rolePermissions: Record<string, string[]> = { Support: ["support.read", "support.reply", "support.manage"], Moderator: ["moderation.review"], Finance: ["finance.read", "finance.refund", "finance.payout"], "Read Only": ["support.read", "finance.read"] };
-  if (!Types.ObjectId.isValid(req.params.userId) || !(role in rolePermissions) || !Array.isArray(permissions) || permissions.some((permission: unknown) => typeof permission !== "string" || !rolePermissions[role].includes(permission))) { res.status(400).json({ status: "Failed", message: "Rôle ou permissions invalides." }); return; }
+  const { permissions } = req.body ?? {};
+  const availablePermissions = ["support.read", "support.reply", "support.manage", "moderation.review", "finance.read", "finance.refund", "finance.payout", "accounts.delete"];
+  if (!Types.ObjectId.isValid(req.params.userId) || !Array.isArray(permissions) || permissions.some((permission: unknown) => typeof permission !== "string" || !availablePermissions.includes(permission)) || new Set(permissions).size !== permissions.length) { res.status(400).json({ status: "Failed", message: "Permissions invalides." }); return; }
   const target = await getUser(req.params.userId); if (!target) { res.status(404).json({ status: "Failed", message: "Compte introuvable." }); return; }
-  const group = await (await import("../model/userGroup.model")).default.findOneAndUpdate({ name: role }, { $setOnInsert: { name: role } }, { upsert: true, new: true });
+  if ((target as any).userGroupMember_id?.usergroup_id?.name === "Super Admin" || String((req as any).user?._id) === req.params.userId) { res.status(403).json({ status: "Failed", message: "Le Super Admin et son propre compte ne peuvent pas être modifiés ici." }); return; }
+  const group = await (await import("../model/userGroup.model")).default.findOneAndUpdate({ name: "Admin" }, { $setOnInsert: { name: "Admin" } }, { upsert: true, new: true });
   const member = await UserGroupMember.findOneAndUpdate({ user_id: req.params.userId }, { $set: { usergroup_id: group._id, adminPermissions: permissions } }, { upsert: true, new: true, setDefaultsOnInsert: true });
   await (await import("../model/user.model")).default.findByIdAndUpdate(req.params.userId, { $set: { userGroupMember_id: member._id } });
-  const actor = (req as any).user; await recordAdminAction({ actorId: String(actor._id), actorName: actor.username ?? "Super Admin", action: "admin_staff.role.assigned", targetType: "user", targetId: req.params.userId, targetLabel: target.username, reason: `${role}: ${permissions.join(",")}`, ip: req.ip });
-  res.status(200).json({ status: "Success", data: { userId: req.params.userId, role, permissions } });
+  const actor = (req as any).user; await recordAdminAction({ actorId: String(actor._id), actorName: actor.username ?? "Super Admin", action: "admin_staff.permissions.updated", targetType: "user", targetId: req.params.userId, targetLabel: target.username, reason: `Admin: ${permissions.join(",") || "aucune permission"}`, ip: req.ip });
+  res.status(200).json({ status: "Success", data: { userId: req.params.userId, role: "Admin", permissions } });
 });
 
 export { listAdminAudit, listAdminCategories, createAdminCategory, listAdminPlans, updateAdminPlan, getSellerEntitlements, startSellerImpersonation, stopSellerImpersonation, getFinancialReport, recordAdminRefund, getAdminCurrencyRates, updateAdminCurrencyRates, getAdminOperationsOverview, getSeller360, updateSellerCommission, getSellerPayoutReport, recordSellerPayout, exportAdminData, listAdminStaff, setAdminStaffRole, requestAdminStepUp, verifyAdminStepUp };

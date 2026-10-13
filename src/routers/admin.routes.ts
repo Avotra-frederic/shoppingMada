@@ -2,6 +2,7 @@ import { Router } from "express";
 import { createAdminCategory, getAdminCurrencyRates, getFinancialReport, getSellerEntitlements, listAdminAudit, listAdminCategories, listAdminPlans, recordAdminRefund, startSellerImpersonation, stopSellerImpersonation, updateAdminCurrencyRates, updateAdminPlan, getAdminOperationsOverview, getSeller360, updateSellerCommission, getSellerPayoutReport, recordSellerPayout, exportAdminData, listAdminStaff, setAdminStaffRole, requestAdminStepUp, verifyAdminStepUp } from "../controller/admin.controller";
 import { auth } from "../middleware/auth.middleware";
 import requireAdminStepUp from "../middleware/admin-step-up.middleware";
+import { facebookConnectCandidates, facebookConnectSelect, facebookConnectStart, facebookDisconnect, facebookOAuthCallback, facebookProducts, facebookPublishProduct, facebookStatus } from "../controller/facebook-admin.controller";
 
 const adminRoutes = Router();
 adminRoutes.post("/admin/step-up/request", auth, requestAdminStepUp);
@@ -26,4 +27,12 @@ adminRoutes.post("/admin/finance/seller-payouts/:shopId", auth, requireAdminStep
 adminRoutes.get("/admin/export", auth, exportAdminData);
 adminRoutes.get("/admin/staff", auth, listAdminStaff);
 adminRoutes.put("/admin/staff/:userId", auth, requireAdminStepUp, setAdminStaffRole);
+adminRoutes.get("/admin/facebook/oauth/callback", facebookOAuthCallback);
+adminRoutes.get("/admin/facebook/status", auth, facebookStatus);
+adminRoutes.get("/admin/facebook/connect/start", auth, facebookConnectStart);
+adminRoutes.get("/admin/facebook/connect/flow/:flow", auth, facebookConnectCandidates);
+adminRoutes.post("/admin/facebook/connect/flow/:flow/select", auth, requireAdminStepUp, facebookConnectSelect);
+adminRoutes.delete("/admin/facebook/connect", auth, requireAdminStepUp, facebookDisconnect);
+adminRoutes.get("/admin/facebook/products", auth, facebookProducts);
+adminRoutes.post("/admin/facebook/products/:productId/publish", auth, requireAdminStepUp, facebookPublishProduct);
 export default adminRoutes;

@@ -22,4 +22,7 @@ export default interface IBoutiks extends Document
     tiktokUrl?: string;
     youtubeUrl?: string;
     isActive?: boolean;
+    freeAccessStartedAt?: Date;
+    freeAccessEndsAt?: Date;
+    freeProductQuota?: number;
 }

@@ -3,7 +3,7 @@ const userGroupScheme = new Schema({
     name:{
         type: String,
         required: true,
-        enum: ["Super Admin", "Boutiks", "Client", "Support", "Moderator", "Finance", "Read Only"]
+        enum: ["Super Admin", "Admin", "Boutiks", "Client", "Support", "Moderator", "Finance", "Read Only"]
     }
 },{
     timestamps: true,

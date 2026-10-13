@@ -25,6 +25,17 @@ import sendEmail from "../helpers/mail";
 import { updateBoutiks } from "../service/boutiks.service";
 import { recordAdminAction } from "../service/admin-audit.service";
 import User from "../model/user.model";
+import AdminAudit from "../model/admin-audit.model";
+import UserGroupMember from "../model/userGroupMember.model";
+import Boutiks from "../model/boutiks.model";
+import PersonnalInfo from "../model/personnalInfo";
+import Product from "../model/product.model";
+import Comment from "../model/comment.model";
+import MarketplaceOrder from "../model/marketplace-order.model";
+import Subscription from "../model/abonnement.model";
+import Notification from "../model/notification.model";
+import FinancialEntry from "../model/financial-entry.model";
+import { hasAdminPermission } from "../service/admin-permissions.service";
 
 const storeUser = expressAsyncHandler(async (req: Request, res: Response) => {
   const credentials = {
@@ -386,7 +397,7 @@ const all = expressAsyncHandler(async (req: Request, res: Response) => {
         User.aggregate([{ $lookup: { from: "usergroupmembers", localField: "userGroupMember_id", foreignField: "_id", as: "member" } }, { $unwind: { path: "$member", preserveNullAndEmptyArrays: true } }, { $lookup: { from: "usergroups", localField: "member.usergroup_id", foreignField: "_id", as: "group" } }, { $unwind: { path: "$group", preserveNullAndEmptyArrays: true } }, { $group: { _id: "$group.name", count: { $sum: 1 } } }]),
         User.countDocuments({ $or: [{ userGroupMember_id: { $exists: false } }, { userGroupMember_id: null }] }),
       ]);
-      res.status(200).json({ status: "Success", data, pagination: { page, limit, total, pages: Math.ceil(total / limit) }, stats: { total: roleStats.reduce((sum: number, item: any) => sum + item.count, 0), sellers: roleStats.find((item: any) => item._id === "Boutiks")?.count ?? 0, clients: roleStats.find((item: any) => item._id === "Client")?.count ?? 0, admins: roleStats.find((item: any) => item._id === "Super Admin")?.count ?? 0, disabled, active: roleStats.filter((item: any) => item._id).reduce((sum: number, item: any) => sum + item.count, 0) } });
+      res.status(200).json({ status: "Success", data, pagination: { page, limit, total, pages: Math.ceil(total / limit) }, stats: { total: roleStats.reduce((sum: number, item: any) => sum + item.count, 0), sellers: roleStats.find((item: any) => item._id === "Boutiks")?.count ?? 0, clients: roleStats.find((item: any) => item._id === "Client")?.count ?? 0, admins: roleStats.filter((item: any) => ["Admin", "Super Admin", "Support", "Moderator", "Finance", "Read Only"].includes(item._id)).reduce((sum: number, item: any) => sum + item.count, 0), disabled, active: roleStats.filter((item: any) => item._id).reduce((sum: number, item: any) => sum + item.count, 0) } });
       return;
     }
     const users = await getAllUser();
@@ -551,7 +562,24 @@ const changeUserGroupToAdmin = expressAsyncHandler(
       return;
     }
 
-    const userGroup = await findUserGroupId("Super Admin");
+    if (String(user._id) === String(id)) {
+      res.status(400).json({ status: "Failed", message: "Vous ne pouvez pas modifier votre propre rôle ici." });
+      return;
+    }
+    const target = await getUser(id);
+    if (!target) {
+      res.status(404).json({ status: "Failed", message: "Utilisateur introuvable." });
+      return;
+    }
+    if ((target as any).userGroupMember_id?.usergroup_id?.name === "Super Admin") {
+      res.status(403).json({ status: "Failed", message: "Le compte Super Admin est protégé." });
+      return;
+    }
+    const userGroup = await findUserGroupId("Admin");
+    if (!userGroup) {
+      res.status(500).json({ status: "Failed", message: "Le groupe Admin n’est pas configuré." });
+      return;
+    }
     const newUserGroup = await add_user_in_user_group({
       user_id: new Types.ObjectId(id),
       usergroup_id: userGroup?._id as Types.ObjectId,
@@ -565,13 +593,65 @@ const changeUserGroupToAdmin = expressAsyncHandler(
 
     await updateUser(id, { userGroupMember_id: newUserGroup._id } as IUser);
 
-    await recordAdminAction({ actorId: String(user._id), actorName: user.username ?? "Super Admin", action: "account.promoted_super_admin", targetType: "user", targetId: String(id), targetLabel: (await getUser(id))?.username ?? "", reason: String(req.body?.reason ?? "").slice(0, 500), ip: req.ip });
+    await recordAdminAction({ actorId: String(user._id), actorName: user.username ?? "Super Admin", action: "account.promoted_admin", targetType: "user", targetId: String(id), targetLabel: target.username ?? "", reason: String(req.body?.reason ?? "").slice(0, 500), ip: req.ip });
 
     res
       .status(201)
-      .json({ status: "Success", message: "La modification a été effectuée." });
+      .json({ status: "Success", message: "Le compte est maintenant Admin. Le Super Admin peut lui attribuer ses permissions." });
   },
 );
+
+const permanentlyDeleteAccount = expressAsyncHandler(async (req: Request, res: Response) => {
+  const actor = (req as any).user;
+  const targetId = req.params.id;
+  if (!actor || !hasAdminPermission(actor, "accounts.delete")) {
+    res.status(403).json({ status: "Failed", message: "La permission de suppression définitive est requise." });
+    return;
+  }
+  if (!Types.ObjectId.isValid(targetId)) {
+    res.status(400).json({ status: "Failed", message: "Identifiant de compte invalide." });
+    return;
+  }
+  if (String(actor._id) === targetId) {
+    res.status(400).json({ status: "Failed", message: "Vous ne pouvez pas supprimer votre propre compte." });
+    return;
+  }
+
+  const target = await User.findById(targetId).populate({ path: "userGroupMember_id", populate: { path: "usergroup_id" } }).lean<any>();
+  if (!target) {
+    res.status(404).json({ status: "Failed", message: "Compte introuvable." });
+    return;
+  }
+  if (target.userGroupMember_id?.usergroup_id?.name === "Super Admin") {
+    res.status(403).json({ status: "Failed", message: "Le compte Super Admin ne peut pas être supprimé." });
+    return;
+  }
+  if (req.body?.confirmation !== target.email) {
+    res.status(400).json({ status: "Failed", message: "Confirmez la suppression en saisissant l’adresse e-mail exacte du compte." });
+    return;
+  }
+
+  const shopId = target.boutiks_id?._id ?? target.boutiks_id;
+  const label = String(target.username ?? "Compte").slice(0, 120);
+  await AdminAudit.create({ actorId: actor._id, actorName: actor.username ?? "Admin", action: "account.deleted", targetType: "user", targetId, targetLabel: label, reason: "Suppression définitive demandée depuis la gestion des comptes", metadata: { accountEmail: target.email, role: target.userGroupMember_id?.usergroup_id?.name ?? "disabled" }, ip: req.ip });
+
+  const personalInfoId = target.personnalInfo_id?._id ?? target.personnalInfo_id;
+  if (personalInfoId) await PersonnalInfo.deleteOne({ _id: personalInfoId });
+  if (shopId) {
+    await Product.deleteMany({ boutiks_id: shopId });
+    await Boutiks.deleteOne({ _id: shopId });
+  }
+  await Comment.updateMany({ owner_id: target._id }, { $set: { comment: "Avis associé à un compte supprimé." }, $unset: { owner_id: 1 } });
+  await Product.updateMany({ owner_id: target._id }, { $set: { owner_id: null } });
+  await MarketplaceOrder.updateMany({ owner_id: target._id }, { $set: { "customer.name": "Client supprimé", "customer.phone": "", "customer.email": "", "customer.address": "", "customer.city": "" }, $unset: { owner_id: 1, trackingTokenHash: 1 } });
+  await Subscription.deleteMany({ owner_id: target._id });
+  await Notification.deleteMany({ recipientId: target._id });
+  await FinancialEntry.updateMany({ ownerId: target._id }, { $unset: { ownerId: 1 } });
+  await UserGroupMember.deleteOne({ user_id: target._id });
+  await User.deleteOne({ _id: target._id });
+
+  res.status(200).json({ status: "Success", message: "Le compte a été supprimé définitivement. Les historiques nécessaires ont été conservés sous forme anonymisée." });
+});
 
 const authVerify = expressAsyncHandler(async (req: Request, res: Response) => {
   const userId = (req as any).user?._id;
@@ -614,5 +694,6 @@ export {
   addProfilePicture,
   updateUserInfo,
   changeUserGroupToAdmin,
+  permanentlyDeleteAccount,
   authVerify
 };

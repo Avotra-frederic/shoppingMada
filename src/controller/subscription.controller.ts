@@ -34,7 +34,7 @@ const sendNewSubscription = expressAsyncHandler(async (req: Request, res: Respon
     return;
   }
 
-  const { plan = "Pro", transactionPhoneNumber, refTransaction, paymentMethodId } = req.body;
+  const { plan = "pro", transactionPhoneNumber, refTransaction, paymentMethodId } = req.body;
   if (![transactionPhoneNumber, refTransaction, paymentMethodId].every((value) => typeof value === "string" && value.trim())) {
     res.status(400).json({ status: "Failed", message: "Les informations de paiement sont incomplètes." });
     return;
@@ -49,10 +49,25 @@ const sendNewSubscription = expressAsyncHandler(async (req: Request, res: Respon
     res.status(409).json({ status: "Failed", message: "Une demande d’abonnement est déjà en attente pour cette boutique." });
     return;
   }
+  const planKey = String(plan).toLowerCase();
+  if (planKey !== "pro") {
+    res.status(400).json({ status: "Failed", message: "Ce forfait ne peut pas être souscrit depuis ce parcours." });
+    return;
+  }
+  const planConfiguration: any = await SubscriptionPlan.findOne({ key: planKey, active: true }).lean();
+  if (!planConfiguration) {
+    res.status(409).json({ status: "Failed", message: "Le forfait Pro est temporairement indisponible." });
+    return;
+  }
   const paymentConfiguration = await getSubscriptionPaymentMethods(true);
-  const planConfiguration: any = await SubscriptionPlan.findOne({ key: String(plan).toLowerCase(), active: true }).lean();
+  const amountToCharge = Number(planConfiguration.monthlyPriceMGA) > 0 ? Number(planConfiguration.monthlyPriceMGA) : paymentConfiguration.monthlyPriceMGA;
+  const latestCompleted: any = await Subscription.findOne({ owner_id: user._id, payementStatus: "Completed", endDate: { $gt: new Date() } }).sort({ endDate: -1 }).lean();
+  if (latestCompleted && String(latestCompleted.plan).toLowerCase() === planKey) {
+    res.status(409).json({ status: "Failed", message: "Votre forfait Pro est déjà actif. Vous pourrez le renouveler à l’approche de son échéance." });
+    return;
+  }
   const subscription = await createNewSubscription({
-    plan: String(plan).slice(0, 80),
+    plan: planKey,
     transactionPhoneNumber: String(transactionPhoneNumber).trim().slice(0, 40),
     refTransaction: String(refTransaction).trim().slice(0, 120),
     selectedPhoneNumber: paymentMethod.accountNumber,
@@ -61,7 +76,7 @@ const sendNewSubscription = expressAsyncHandler(async (req: Request, res: Respon
     paymentAccountName: paymentMethod.accountName,
     paymentAccountNumber: paymentMethod.accountNumber,
     paymentInstructions: paymentMethod.instructions,
-    priceMGA: Number(planConfiguration?.monthlyPriceMGA) > 0 ? planConfiguration.monthlyPriceMGA : paymentConfiguration.monthlyPriceMGA,
+    priceMGA: amountToCharge,
     owner_id: user._id,
     payementStatus: "Pending",
   } as any);
@@ -90,12 +105,14 @@ const getSubscriptionPaymentOptions = expressAsyncHandler(async (req: Request, r
 });
 
 const listPublicSubscriptionPlans = expressAsyncHandler(async (_req: Request, res: Response) => {
+  await SubscriptionPlan.updateOne({ key: "free" }, { $setOnInsert: { key: "free", name: "Gratuit", monthlyPriceMGA: 0, durationDays: 30, graceDays: 7, maxProducts: 20, features: { advancedAnalytics: false, prioritySupport: false, customCategories: false }, active: true } }, { upsert: true });
+  await SubscriptionPlan.updateOne({ key: "enterprise" }, { $setOnInsert: { key: "enterprise", name: "Entreprise", monthlyPriceMGA: 0, durationDays: 30, graceDays: 7, maxProducts: 0, features: { advancedAnalytics: true, prioritySupport: true, customCategories: true }, active: false } }, { upsert: true });
   const plans = await SubscriptionPlan.find({ active: true }).select("key name monthlyPriceMGA durationDays maxProducts features").sort({ monthlyPriceMGA: 1 }).lean();
   const paymentSettings = await getSubscriptionPaymentMethods();
   const data = plans.map((plan) => ({
     key: plan.key,
     name: plan.name,
-    monthlyPriceMGA: plan.key === "pro" && Number(plan.monthlyPriceMGA) <= 0 ? paymentSettings.monthlyPriceMGA : plan.monthlyPriceMGA,
+    monthlyPriceMGA: plan.key === "pro" ? paymentSettings.monthlyPriceMGA : plan.monthlyPriceMGA,
     durationDays: plan.durationDays,
     maxProducts: plan.maxProducts,
     features: plan.features,
@@ -161,7 +178,7 @@ const updateNewSubscription = expressAsyncHandler(async (req: Request, res: Resp
     return;
   }
 
-  const { payementStatus, motif, startDate, endDate } = req.body;
+  const { payementStatus, motif } = req.body;
   if (!isAdmin && (payementStatus !== "Canceled" || subscription.payementStatus !== "Pending")) {
     res.status(403).json({ status: "Failed", message: "Vous pouvez uniquement annuler une demande en attente." });
     return;
@@ -172,6 +189,10 @@ const updateNewSubscription = expressAsyncHandler(async (req: Request, res: Resp
   }
   if (subscription.payementStatus !== "Pending") {
     res.status(409).json({ status: "Failed", message: "Cette demande a déjà été traitée." });
+    return;
+  }
+  if (isAdmin && payementStatus === "Completed" && String(subscription.plan).toLowerCase() !== "pro") {
+    res.status(409).json({ status: "Failed", message: "Seules les demandes du forfait Pro peuvent être validées dans ce parcours." });
     return;
   }
   const now = new Date();
@@ -196,7 +217,7 @@ const updateNewSubscription = expressAsyncHandler(async (req: Request, res: Resp
     const owner = updated.owner_id as IUser;
     const boutikId = (owner?.boutiks_id as any)?._id ?? owner?.boutiks_id;
     const boutik = boutikId && await updateBoutiks(String(boutikId), {
-      subscription_id: new Types.ObjectId(String(updated._id)), plan: "pro",
+      subscription_id: new Types.ObjectId(String(updated._id)), plan: String(updated.plan).toLowerCase(),
     } as IBoutiks);
     if (!boutik) {
       res.status(500).json({ status: "Failed", message: "La demande est validée, mais l’activation de la boutique a échoué." });
@@ -292,7 +313,7 @@ const cancelCurrentSubscription = expressAsyncHandler(async (req: Request, res: 
   const subscription = await findSubscription(req.params.id);
   if (!subscription) { res.status(404).json({ status: "Failed", message: "Abonnement introuvable." }); return; }
   if (String((subscription.owner_id as any)?._id ?? subscription.owner_id) !== String(user._id)) { res.status(403).json({ status: "Failed", message: "Accès refusé." }); return; }
-  if (subscription.payementStatus !== "Completed" || !(subscription.endDate && new Date(subscription.endDate).getTime() > Date.now())) { res.status(409).json({ status: "Failed", message: "Aucun abonnement actif à résilier." }); return; }
+  if (subscription.payementStatus !== "Completed" || !(subscription.endDate && new Date(subscription.endDate).getTime() > Date.now()) || new Date(subscription.startDate ?? 0).getTime() > Date.now()) { res.status(409).json({ status: "Failed", message: "Aucun abonnement actif à résilier." }); return; }
   const updated = await Subscription.findOneAndUpdate({ _id: req.params.id, cancelAtPeriodEnd: { $ne: true } }, { $set: { cancelAtPeriodEnd: true, canceledAt: new Date(), autoRenew: false } }, { new: true }).lean();
   res.status(updated ? 200 : 409).json({ status: updated ? "Success" : "Failed", message: updated ? "Résiliation programmée à la fin de la période payée." : "La résiliation est déjà programmée.", data: updated });
 });
@@ -320,7 +341,10 @@ const processSubscriptionLifecycle = async () => {
     if (lifecycleStatus === "expired" || lifecycleStatus === "canceled") {
       const UserModel = (await import("../model/user.model")).default;
       const owner: any = await UserModel.findById(subscription.owner_id).select("boutiks_id").lean();
-      if (owner?.boutiks_id) await updateBoutiks(String(owner.boutiks_id), { plan: "free", subscription_id: undefined } as any);
+      if (owner?.boutiks_id) {
+        const replacement: any = await Subscription.findOne({ owner_id: subscription.owner_id, payementStatus: "Completed", startDate: { $lte: now }, endDate: { $gt: now }, cancelAtPeriodEnd: { $ne: true }, _id: { $ne: subscription._id } }).sort({ endDate: -1 }).lean();
+        await updateBoutiks(String(owner.boutiks_id), replacement ? { plan: String(replacement.plan).toLowerCase(), subscription_id: replacement._id } as any : { plan: "free", subscription_id: undefined } as any);
+      }
     }
   }
   await Subscription.updateMany({ payementStatus: "Completed", cancelAtPeriodEnd: true, endDate: { $lte: now }, lifecycleStatus: { $nin: ["expired", "canceled"] } }, { $set: { lifecycleStatus: "canceled" } });

@@ -15,6 +15,7 @@ const create_product = async (product: IProduct): Promise<IProduct | null> => {
 const getAllProduct = async (): Promise<IProduct[] | null> => {
   try {
     const activeBoutikIds = await getActiveBoutikIds();
+    if (!activeBoutikIds.length) return [];
     const products = await Product.find({
       publicationStatus: "Approved",
       boutiks_id: { $in: activeBoutikIds },
@@ -55,6 +56,7 @@ const getAllProductInCategory = async (
 ): Promise<IProduct[] | null> => {
   try {
     const activeBoutikIds = await getActiveBoutikIds();
+    if (!activeBoutikIds.length) return [];
     const products = await Product.find({
       category: slug,
       publicationStatus: "Approved",
@@ -68,6 +70,7 @@ const getAllProductInCategory = async (
 
 const listPublicProducts = async (options: { page: number; limit: number; q?: string; location?: string; category?: string; sort?: string; minPrice?: number; maxPrice?: number }) => {
   const activeBoutikIds = await getActiveBoutikIds();
+  if (!activeBoutikIds.length) return { data: [], pagination: { page: options.page, limit: options.limit, total: 0, pages: 0 } };
   const filter: any = { publicationStatus: "Approved", boutiks_id: { $in: activeBoutikIds } };
   if (options.category) filter.category = options.category;
   if (options.minPrice !== undefined || options.maxPrice !== undefined) {

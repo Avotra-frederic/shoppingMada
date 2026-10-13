@@ -48,14 +48,30 @@ const storeProduct = expressAsyncHandler(
     }
     if (req.method === "POST") {
       if (role === "Boutiks" && boutiks) {
-        const subscription = boutiks.subscription_id as any;
-        const withinGrace = subscription?.lifecycleStatus === "grace" && subscription.graceUntil && new Date(subscription.graceUntil).getTime() > Date.now();
-        const planKey = subscription?.payementStatus === "Completed" && ((subscription.endDate && new Date(subscription.endDate).getTime() > Date.now()) || withinGrace) ? "pro" : "free";
+        const now = new Date();
+        const Subscription = (await import("../model/abonnement.model")).default;
+        const subscription: any = await Subscription.findOne({ owner_id: currentUser._id, payementStatus: "Completed", startDate: { $lte: now }, endDate: { $gt: now } }).sort({ endDate: -1 }).lean();
+        const graceSubscription: any = !subscription ? await Subscription.findOne({ owner_id: currentUser._id, payementStatus: "Completed", lifecycleStatus: "grace", graceUntil: { $gt: now } }).sort({ graceUntil: -1 }).lean() : null;
+        const planKey = String((subscription ?? graceSubscription)?.plan ?? "free").toLowerCase();
         const plan: any = await SubscriptionPlan.findOne({ key: planKey, active: true }).lean();
-        if (plan && Number(plan.maxProducts) > 0) {
+        const freeAccessActive = boutiks.freeAccessEndsAt
+          ? new Date(boutiks.freeAccessEndsAt).getTime() > now.getTime()
+          : new Date((boutiks as any).freeAccessStartedAt ?? (boutiks as any).createdAt).getTime() + 30 * 86400000 > now.getTime();
+        const quota = subscription || graceSubscription
+          ? Number(plan?.maxProducts ?? 20)
+          : freeAccessActive && boutiks.freeProductQuota === 0
+            ? 0
+            : freeAccessActive
+              ? Number((boutiks as any).freeProductQuota ?? plan?.maxProducts ?? 20)
+              : Number(plan?.maxProducts ?? 20);
+        if (!subscription && !graceSubscription && !freeAccessActive) {
+          res.status(403).json({ status: "Failed", code: "FREE_ACCESS_EXPIRED", message: "Votre accès gratuit est terminé. Activez un abonnement Pro pour publier de nouveaux produits." });
+          return;
+        }
+        if (quota > 0) {
           const count = await Product.countDocuments({ boutiks_id: boutiks._id });
-          if (count >= Number(plan.maxProducts)) {
-            res.status(403).json({ status: "Failed", code: "PLAN_QUOTA_REACHED", message: `La limite de ${plan.maxProducts} produits du forfait ${plan.name} est atteinte.`, quota: plan.maxProducts, used: count });
+          if (count >= quota) {
+            res.status(403).json({ status: "Failed", code: "PLAN_QUOTA_REACHED", message: `La limite de ${quota} produits de votre forfait est atteinte.`, quota, used: count });
             return;
           }
         }
@@ -127,6 +143,15 @@ const storeProduct = expressAsyncHandler(
   },
 );
 
+const isBoutikPubliclyEligible = async (shop: any): Promise<boolean> => {
+  if (!shop || shop.isActive === false) return false;
+  const now = new Date();
+  if (shop.freeAccessEndsAt && new Date(shop.freeAccessEndsAt).getTime() > now.getTime()) return true;
+  if (!shop.freeAccessEndsAt && new Date(shop.freeAccessStartedAt ?? shop.createdAt).getTime() + 30 * 86400000 > now.getTime()) return true;
+  const Subscription = (await import("../model/abonnement.model")).default;
+  return Boolean(await Subscription.exists({ owner_id: shop.owner_id, payementStatus: "Completed", $or: [{ startDate: { $lte: now }, endDate: { $gt: now } }, { endDate: { $lte: now }, graceUntil: { $gt: now }, cancelAtPeriodEnd: { $ne: true } }] }));
+};
+
 const getProduct = expressAsyncHandler(async (req: Request, res: Response) => {
   const category = req.params.category ?? (typeof req.query.category === "string" ? req.query.category.trim().slice(0, 100) : undefined);
   const { id } = req.params;
@@ -158,7 +183,8 @@ const getProduct = expressAsyncHandler(async (req: Request, res: Response) => {
     }
     const isOwner = user && String(product.owner_id) === String(user._id);
     const isAdmin = user?.userGroupMember_id?.usergroup_id?.name === "Super Admin";
-    const shopActive = (product.boutiks_id as any)?.isActive !== false;
+    const shop = product.boutiks_id as any;
+    const shopActive = shop?.isActive !== false && await isBoutikPubliclyEligible(shop);
     if ((product.publicationStatus !== "Approved" || !shopActive) && !isOwner && !isAdmin) {
       res.status(404).json({ status: "Failed", message: "Produit introuvable." });
       return;
@@ -450,7 +476,8 @@ const toggleWishlist = expressAsyncHandler(async (req: Request, res: Response) =
   if (!user?._id) { res.status(401).json({ status: "Failed", message: "Connectez-vous pour gérer vos favoris." }); return; }
   const productId = req.params.id;
   if (!/^[a-f\d]{24}$/i.test(productId)) { res.status(400).json({ status: "Failed", message: "Produit invalide." }); return; }
-  const exists = await Product.exists({ _id: productId, publicationStatus: "Approved" });
+  const product: any = await Product.findOne({ _id: productId, publicationStatus: "Approved" }).populate("boutiks_id").lean();
+  const exists = product && await isBoutikPubliclyEligible(product.boutiks_id);
   if (!exists) { res.status(404).json({ status: "Failed", message: "Produit indisponible." }); return; }
   const current = await Product.findById(productId).select("wishlistedBy").lean<any>();
   const isSaved = (current?.wishlistedBy ?? []).some((id: any) => String(id) === String(user._id));
@@ -460,7 +487,8 @@ const toggleWishlist = expressAsyncHandler(async (req: Request, res: Response) =
 
 const listWishlist = expressAsyncHandler(async (req: Request, res: Response) => {
   const user = (req as any).user; const page = Math.max(1, Number.parseInt(String(req.query.page ?? "1"), 10) || 1); const limit = Math.min(50, Math.max(1, Number.parseInt(String(req.query.limit ?? "20"), 10) || 20));
-  const filter = { wishlistedBy: user._id, publicationStatus: "Approved" };
+  const activeBoutikIds = await (await import("../service/boutiks.service")).getActiveBoutikIds();
+  const filter = { wishlistedBy: user._id, publicationStatus: "Approved", boutiks_id: { $in: activeBoutikIds } };
   const [data, total] = await Promise.all([Product.find(filter).populate("boutiks_id").sort({ updatedAt: -1 }).skip((page - 1) * limit).limit(limit).lean(), Product.countDocuments(filter)]);
   res.status(200).json({ status: "Success", data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
 });

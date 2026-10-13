@@ -49,9 +49,12 @@ const BoutiksSheme = new Schema({
     plan:{
         type: String,
         required: true,
-        enum: ["free", "pro"],
+        enum: ["free", "pro", "enterprise"],
         default: "free"
     },
+    freeAccessStartedAt: { type: Date },
+    freeAccessEndsAt: { type: Date },
+    freeProductQuota: { type: Number, min: 0 },
     commissionPercent: { type: Number, min: 0, max: 50, default: 0 },
     payoutStatus: { type: String, enum: ["manual", "pending", "paid"], default: "manual" },
     payoutReference: { type: String, maxlength: 120 },

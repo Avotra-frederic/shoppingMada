@@ -57,7 +57,7 @@ const auth = expressAsyncHandler(
           res.status(403).json({ status: "Unauthorized", message: "Ce compte a été désactivé." });
           return;
         }
-        if (role === "Support" || role === "Moderator" || role === "Finance" || role === "Read Only") {
+        if (role === "Admin" || role === "Support" || role === "Moderator" || role === "Finance" || role === "Read Only") {
           const membership: any = await (await import("../model/userGroupMember.model")).default.findOne({ user_id: userId }).select("adminPermissions").lean();
           (decodedToken as any).adminPermissions = membership?.adminPermissions ?? [];
           (decodedToken as any).userGroupMember_id = { user_id: userId, usergroup_id: { name: role } };

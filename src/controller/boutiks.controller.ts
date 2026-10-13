@@ -13,6 +13,7 @@ import { change_user_group } from "../service/user_group_member.service";
 import { Types } from "mongoose";
 import { updateUser } from "../service/user.service";
 import IUser from "../interface/user.interface";
+import SubscriptionPlan from "../model/subscription-plan.model";
 
 const storeBoutiksInfo = expressAsyncHandler(
   async (req: Request, res: Response) => {
@@ -22,7 +23,12 @@ const storeBoutiksInfo = expressAsyncHandler(
       res.status(409).json({ status: "Failed", message: "Une boutique existe déjà pour ce compte." });
       return;
     }
-    Object.assign(data, { owner_id: ownerId });
+    await SubscriptionPlan.updateOne({ key: "free" }, { $setOnInsert: { name: "Gratuit", monthlyPriceMGA: 0, durationDays: 30, graceDays: 7, maxProducts: 20, trialEnabled: false, trialDurationDays: 30, trialMaxProducts: 20, features: { advancedAnalytics: false, prioritySupport: false, customCategories: false }, active: true } }, { upsert: true });
+    const freeOffer: any = await SubscriptionPlan.findOne({ key: "free", active: true }).lean();
+    const freeAccessStartedAt = new Date();
+    const freeDurationDays = freeOffer?.trialEnabled ? Number(freeOffer.trialDurationDays ?? 30) : Number(freeOffer?.durationDays ?? 30);
+    const freeAccessEndsAt = new Date(freeAccessStartedAt.getTime() + Math.min(60, Math.max(1, freeDurationDays)) * 86400000);
+    Object.assign(data, { owner_id: ownerId, plan: "free", freeAccessStartedAt, freeAccessEndsAt, freeProductQuota: freeOffer?.trialEnabled ? Number(freeOffer.trialMaxProducts ?? 20) : undefined });
     if ((req as any).fileName) {
       data.logo = (req as any).fileName;
     } else {
@@ -207,6 +213,23 @@ const addNewCategorieINBoutiks = expressAsyncHandler(
     }
     if (typeof category_id !== "string" || !category_id.trim()) {
       res.status(400).json({ status: "Failed", message: "Catégorie invalide." });
+      return;
+    }
+    const now = new Date();
+    const Subscription = (await import("../model/abonnement.model")).default;
+    const activeSubscription: any = await Subscription.findOne({ owner_id: user._id, payementStatus: "Completed", startDate: { $lte: now }, endDate: { $gt: now } }).sort({ endDate: -1 }).lean();
+    const graceSubscription: any = !activeSubscription ? await Subscription.findOne({ owner_id: user._id, payementStatus: "Completed", lifecycleStatus: "grace", graceUntil: { $gt: now } }).sort({ graceUntil: -1 }).lean() : null;
+    const planKey = String((activeSubscription ?? graceSubscription)?.plan ?? "free").toLowerCase();
+    const plan: any = await SubscriptionPlan.findOne({ key: planKey, active: true }).lean();
+    const freeAccessActive = boutiks.freeAccessEndsAt
+      ? new Date(boutiks.freeAccessEndsAt).getTime() > now.getTime()
+      : new Date((boutiks as any).freeAccessStartedAt ?? (boutiks as any).createdAt).getTime() + 30 * 86400000 > now.getTime();
+    if (!activeSubscription && !graceSubscription && !freeAccessActive) {
+      res.status(403).json({ status: "Failed", code: "FREE_ACCESS_EXPIRED", message: "Votre accès gratuit est terminé. Activez le forfait Pro pour gérer les catégories." });
+      return;
+    }
+    if (!freeAccessActive && !plan?.features?.customCategories) {
+      res.status(403).json({ status: "Failed", code: "PLAN_FEATURE_REQUIRED", message: "Les catégories personnalisées sont disponibles avec un forfait Pro ou Entreprise." });
       return;
     }
     const newBoutiksInfo = await addNewCategorie(
