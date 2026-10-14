@@ -10,7 +10,7 @@ const add_user_in_user_group = async (
   if (data == null) return null;
   return UserGroupMember.findOneAndUpdate(
     { user_id: data.user_id },
-    { $set: { usergroup_id: data.usergroup_id } },
+    { $set: { usergroup_id: data.usergroup_id, ...(data.adminPermissions !== undefined ? { adminPermissions: data.adminPermissions } : {}) } },
     { new: true, upsert: true, setDefaultsOnInsert: true },
   );
 };

@@ -554,6 +554,13 @@ const changeUserGroupToAdmin = expressAsyncHandler(
   async (req: Request, res: Response) => {
     const user = (req as any).user;
     const { id } = req.params;
+    const permissions = req.body?.permissions ?? [];
+    const availablePermissions = ["support.read", "support.reply", "support.manage", "moderation.review", "finance.read", "finance.refund", "finance.payout", "accounts.delete"];
+
+    if (!Array.isArray(permissions) || permissions.some((permission: unknown) => typeof permission !== "string" || !availablePermissions.includes(permission)) || new Set(permissions).size !== permissions.length) {
+      res.status(400).json({ status: "Failed", message: "La liste des permissions administrateur est invalide." });
+      return;
+    }
 
     if (!user || user.userGroupMember_id?.usergroup_id?.name !== "Super Admin") {
       res.status(401).json({
@@ -584,6 +591,7 @@ const changeUserGroupToAdmin = expressAsyncHandler(
     const newUserGroup = await add_user_in_user_group({
       user_id: new Types.ObjectId(id),
       usergroup_id: userGroup?._id as Types.ObjectId,
+      adminPermissions: permissions,
     } as IUserGroupMember);
     if (!newUserGroup) {
       res
@@ -598,7 +606,7 @@ const changeUserGroupToAdmin = expressAsyncHandler(
 
     res
       .status(201)
-      .json({ status: "Success", message: "Le compte est maintenant Admin. Le Super Admin peut lui attribuer ses permissions." });
+      .json({ status: "Success", message: "Le compte est maintenant Admin avec les permissions sélectionnées." });
   },
 );
 
