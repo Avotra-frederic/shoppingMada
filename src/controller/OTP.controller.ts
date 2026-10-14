@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import sendEmail from "../helpers/mail";
 import bcrypt from "bcryptjs";
 import { updateUser } from "../service/user.service";
+import toAuthTokenPayload from "../helpers/auth-token";
 const verifyOTPCode = expressAsyncHandler(async(req: Request, res:Response)=>{
     const OTP = req.body.OTP;
     const user = (req as any).user;
@@ -17,7 +18,7 @@ const verifyOTPCode = expressAsyncHandler(async(req: Request, res:Response)=>{
 
     if ((req as any).user.tokenPurpose === "email-verification") {
         const { tokenPurpose: _tokenPurpose, iat: _iat, exp: _exp, ...authUser } = (req as any).user;
-        const token = jwt.sign(authUser, process.env.TOKEN_SECRET as string, { expiresIn: "1h" });
+        const token = jwt.sign(toAuthTokenPayload(authUser), process.env.TOKEN_SECRET as string, { expiresIn: "1h" });
         res.cookie("jwt", token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
@@ -25,7 +26,7 @@ const verifyOTPCode = expressAsyncHandler(async(req: Request, res:Response)=>{
         });
     } else if ((req as any).user.tokenPurpose === "password-reset") {
         const { iat: _iat, exp: _exp, ...authUser } = (req as any).user;
-        const token = jwt.sign({ ...authUser, otpVerified: true }, process.env.TOKEN_SECRET as string, { expiresIn: "10m" });
+        const token = jwt.sign({ ...toAuthTokenPayload(authUser), otpVerified: true, tokenPurpose: "password-reset" }, process.env.TOKEN_SECRET as string, { expiresIn: "10m" });
         res.cookie("jwt", token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",

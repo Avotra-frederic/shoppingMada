@@ -36,6 +36,7 @@ import Subscription from "../model/abonnement.model";
 import Notification from "../model/notification.model";
 import FinancialEntry from "../model/financial-entry.model";
 import { hasAdminPermission } from "../service/admin-permissions.service";
+import toAuthTokenPayload from "../helpers/auth-token";
 
 const storeUser = expressAsyncHandler(async (req: Request, res: Response) => {
   const credentials = {
@@ -139,7 +140,7 @@ const login = expressAsyncHandler(async (req: Request, res: Response) => {
       });
       return;
     }
-    const token = jwt.sign({ ...authUser, tokenPurpose: "email-verification" }, process.env.TOKEN_SECRET as string, {
+    const token = jwt.sign({ ...toAuthTokenPayload(authUser), tokenPurpose: "email-verification" }, process.env.TOKEN_SECRET as string, {
       expiresIn: "1h",
     });
 
@@ -158,7 +159,7 @@ const login = expressAsyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
-  const token = jwt.sign(authUser, process.env.TOKEN_SECRET as string, {
+  const token = jwt.sign(toAuthTokenPayload(authUser), process.env.TOKEN_SECRET as string, {
     expiresIn: "1h",
   });
 
@@ -192,7 +193,7 @@ const regenerateToken = expressAsyncHandler(
     }
 
       const { password, ...authUser } = updatedUser;
-    const token = jwt.sign(authUser, process.env.TOKEN_SECRET as string, {
+    const token = jwt.sign(toAuthTokenPayload(authUser), process.env.TOKEN_SECRET as string, {
       expiresIn: "1h",
     });
 
@@ -266,7 +267,7 @@ const handleChangePassword = expressAsyncHandler(
       return;
     }
     const { password: _password, ...authUser } = user;
-    const token = jwt.sign({ ...authUser, tokenPurpose: "password-reset" }, process.env.TOKEN_SECRET as string, { expiresIn: "10m" });
+    const token = jwt.sign({ ...toAuthTokenPayload(authUser), tokenPurpose: "password-reset" }, process.env.TOKEN_SECRET as string, { expiresIn: "10m" });
     res.cookie("jwt", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
