@@ -125,6 +125,14 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     res.status(413).json({ status: "Error", message: "La requête dépasse la taille maximale autorisée." });
     return;
   }
+  if (err.code === "LIMIT_FILE_SIZE") {
+    res.status(413).json({ status: "Error", message: "Chaque image doit faire 20 Mo maximum." });
+    return;
+  }
+  if (err.code === "LIMIT_FILE_COUNT" || err.code === "LIMIT_UNEXPECTED_FILE") {
+    res.status(400).json({ status: "Error", message: "Vous pouvez joindre jusqu’à 5 images." });
+    return;
+  }
   const status = err.statusCode || err.status || 500;
   res.status(status).json({ status: "Error", message: status < 500 ? err.message : "Une erreur interne est survenue." });
 });

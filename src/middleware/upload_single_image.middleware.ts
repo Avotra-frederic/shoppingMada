@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import expressAsyncHandler from "express-async-handler";
-import upload, { uploadImage, uploadKycImages, uploadProductImages } from "../config/uploadsingle_multer";
+import upload, { normalizeProductImages, uploadImage, uploadKycImages, uploadProductImages } from "../config/uploadsingle_multer";
 
 const normalizeBoutikCategories = (req: Request) => {
     const value = req.body?.product_category;
@@ -58,8 +58,13 @@ const uploadKycImageFiles = expressAsyncHandler(async(req: Request, res: Respons
 const uploadProductImageFiles = expressAsyncHandler(async(req: Request, res: Response, next: NextFunction) => {
     uploadProductImages(req, res, async(err: any) => {
         if (err) return next(err);
-        (req as any).fileNames = (req.files as Express.Multer.File[] | undefined)?.map(file => file.filename) ?? [];
-        next();
+        try {
+            const files = await normalizeProductImages((req.files as Express.Multer.File[] | undefined) ?? []);
+            (req as any).fileNames = files.map(file => file.filename);
+            next();
+        } catch (error) {
+            next(error);
+        }
     });
 });
 
