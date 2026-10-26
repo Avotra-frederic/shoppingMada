@@ -9,7 +9,7 @@ import Product from "../model/product.model";
 import FacebookPageConnection from "../model/facebook-page-connection.model";
 import FacebookOAuthTransaction from "../model/facebook-oauth-transaction.model";
 import FacebookPublication from "../model/facebook-publication.model";
-import { getActiveBoutikIds, isBoutikPubliclyEligible } from "../service/boutiks.service";
+import { getPublicBoutikIds, isBoutikPubliclyEligible } from "../service/boutiks.service";
 
 const graphVersion = () => (process.env.META_GRAPH_API_VERSION || "v26.0").replace(/^v?/, "v");
 const graphBase = () => `https://graph.facebook.com/${graphVersion()}`;
@@ -136,23 +136,43 @@ export const facebookProducts = expressAsyncHandler(async (req: Request, res: Re
   const page = Math.max(1, Math.min(100000, Number.parseInt(String(req.query.page || "1"), 10) || 1));
   const limit = Math.min(50, Math.max(1, Number.parseInt(String(req.query.limit || "20"), 10) || 20));
   const q = typeof req.query.q === "string" ? req.query.q.trim().slice(0, 100) : "";
-  const activeBoutikIds = await getActiveBoutikIds();
-  const filter: any = { publicationStatus: "Approved", boutiks_id: { $in: activeBoutikIds } };
+  const filter: any = {
+    publicationStatus: "Approved",
+    boutiks_id: { $in: await getPublicBoutikIds() },
+  };
   if (q) filter.name = { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
-  const [allMatchingProducts, connectionResult] = await Promise.all([
-    Product.find(filter).select("name description price photos boutiks_id createdAt updatedAt moderatedAt").populate("boutiks_id", "name isActive owner_id freeAccessEndsAt freeAccessStartedAt createdAt").sort({ updatedAt: -1, _id: -1 }).lean(),
+  const [visibleProducts, total, connectionResult] = await Promise.all([
+    Product.find(filter)
+      .select("name description price photos boutiks_id createdAt updatedAt moderatedAt")
+      .populate("boutiks_id", "name isActive owner_id freeAccessEndsAt freeAccessStartedAt createdAt")
+      .sort({ updatedAt: -1, _id: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit)
+      .lean(),
+    Product.countDocuments(filter),
     FacebookPageConnection.findOne({ connectionKey: "primary" }).select("pageId").lean(),
   ]);
-  const eligibleProducts = await Promise.all(allMatchingProducts.map(async (product: any) => ({ product, eligible: await isBoutikPubliclyEligible(product.boutiks_id) })));
-  const allVisibleProducts = eligibleProducts.filter(({ eligible }) => eligible).map(({ product }) => product);
-  const total = allVisibleProducts.length;
-  const visibleProducts = allVisibleProducts.slice((page - 1) * limit, page * limit);
   const connection: any = connectionResult;
-  const publications = connection ? await FacebookPublication.find({ pageId: connection.pageId, productId: { $in: visibleProducts.map((product: any) => product._id) } }).sort({ createdAt: -1 }).lean() : [];
+  const publications = connection && visibleProducts.length
+    ? await FacebookPublication.find({
+        pageId: connection.pageId,
+        productId: { $in: visibleProducts.map((product: any) => product._id) },
+      }).sort({ createdAt: -1 }).lean()
+    : [];
   const byProduct = new Map<string, any>();
-  publications.forEach((publication: any) => { const id = String(publication.productId); if (!byProduct.has(id)) byProduct.set(id, publication); });
+  publications.forEach((publication: any) => {
+    const id = String(publication.productId);
+    if (!byProduct.has(id)) byProduct.set(id, publication);
+  });
   const pages = Math.ceil(total / limit);
-  res.json({ status: "Success", data: visibleProducts.map((product: any) => ({ ...product, publication: byProduct.get(String(product._id)) || null })), pagination: { page, limit, total, pages, hasNextPage: page < pages, hasPreviousPage: page > 1 } });
+  res.json({
+    status: "Success",
+    data: visibleProducts.map((product: any) => ({
+      ...product,
+      publication: byProduct.get(String(product._id)) || null,
+    })),
+    pagination: { page, limit, total, pages, hasNextPage: page < pages, hasPreviousPage: page > 1 },
+  });
 });
 
 export const facebookPublishProduct = expressAsyncHandler(async (req: Request, res: Response) => {
@@ -161,8 +181,7 @@ export const facebookPublishProduct = expressAsyncHandler(async (req: Request, r
   const product: any = await Product.findOne({ _id: req.params.productId, publicationStatus: "Approved" }).populate("boutiks_id", "name isActive").lean();
   if (!product) { res.status(404).json({ status: "Failed", message: "Seuls les produits approuvés peuvent être publiés." }); return; }
   if (!product.boutiks_id?.isActive) { res.status(409).json({ status: "Failed", message: "La boutique du vendeur est désactivée." }); return; }
-  const activeBoutikIds = await getActiveBoutikIds();
-  if (!activeBoutikIds.includes(String(product.boutiks_id._id))) { res.status(409).json({ status: "Failed", code: "SELLER_SUBSCRIPTION_INACTIVE", message: "La boutique n’est pas actuellement visible dans le catalogue client : son accès gratuit ou son abonnement est expiré. La réactivation doit être effective et couvrir la date actuelle avant la publication Facebook." }); return; }
+  if (!await isBoutikPubliclyEligible(product.boutiks_id)) { res.status(409).json({ status: "Failed", code: "SELLER_SUBSCRIPTION_INACTIVE", message: "La boutique n’est pas actuellement visible dans le catalogue client : son accès gratuit ou son abonnement est expiré." }); return; }
   const photo = Array.isArray(product.photos) ? product.photos.find((item: string) => typeof item === "string" && item.trim()) : null;
   const backendUrl = (process.env.BACKEND_PUBLIC_URL || "").replace(/\/$/, "");
   const shopUrl = (process.env.SHOPINMADA_PUBLIC_URL || "").replace(/\/$/, "");

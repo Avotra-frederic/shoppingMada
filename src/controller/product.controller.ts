@@ -22,7 +22,7 @@ import {
 } from "../service/product.service";
 import path from "path";
 import fs from "fs";
-import { findBoutiks, isBoutikPubliclyEligible } from "../service/boutiks.service";
+import { findBoutiks, getPublicBoutikIds, isBoutikPubliclyEligible } from "../service/boutiks.service";
 import { deleteProductCommand } from "../service/command.service";
 import xss from "xss";
 import { get_user_group_name } from "../service/user_group_member.service";
@@ -175,7 +175,7 @@ const getProduct = expressAsyncHandler(async (req: Request, res: Response) => {
     const isOwner = user && String(product.owner_id) === String(user._id);
     const isAdmin = user?.userGroupMember_id?.usergroup_id?.name === "Super Admin";
     const shop = product.boutiks_id as any;
-    const shopActive = shop?.isActive !== false && await isBoutikPubliclyEligible(shop);
+    const shopActive = await isBoutikPubliclyEligible(shop);
     if ((product.publicationStatus !== "Approved" || !shopActive) && !isOwner && !isAdmin) {
       res.status(404).json({ status: "Failed", message: "Produit introuvable." });
       return;
@@ -478,7 +478,7 @@ const toggleWishlist = expressAsyncHandler(async (req: Request, res: Response) =
 
 const listWishlist = expressAsyncHandler(async (req: Request, res: Response) => {
   const user = (req as any).user; const page = Math.max(1, Number.parseInt(String(req.query.page ?? "1"), 10) || 1); const limit = Math.min(50, Math.max(1, Number.parseInt(String(req.query.limit ?? "20"), 10) || 20));
-  const activeBoutikIds = await (await import("../service/boutiks.service")).getActiveBoutikIds();
+  const activeBoutikIds = await getPublicBoutikIds();
   const filter = { wishlistedBy: user._id, publicationStatus: "Approved", boutiks_id: { $in: activeBoutikIds } };
   const [data, total] = await Promise.all([Product.find(filter).populate("boutiks_id").sort({ updatedAt: -1 }).skip((page - 1) * limit).limit(limit).lean(), Product.countDocuments(filter)]);
   res.status(200).json({ status: "Success", data, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });

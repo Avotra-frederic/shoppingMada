@@ -44,20 +44,25 @@ const findBoutiks = async(owner_id: string): Promise<IBoutiks | null> =>{
 
 const getActiveBoutikIds = async (): Promise<string[]> => {
     const now = new Date();
+    const freeAccessFallback = new Date(now.getTime() - 30 * 86400000);
     const Subscription = (await import("../model/abonnement.model")).default;
-    const activeSubscriptions = await Subscription.find({ payementStatus: "Completed", startDate: { $lte: now }, endDate: { $gt: now } }).select("owner_id").lean<any[]>();
-    const graceSubscriptions = await Subscription.find({ payementStatus: "Completed", endDate: { $lte: now }, graceUntil: { $gt: now } }).select("owner_id").lean<any[]>();
-    const paidOwnerIds = [...activeSubscriptions, ...graceSubscriptions].map((subscription) => subscription.owner_id).filter(Boolean);
-    const ids = await Boutiks.find({
+    const eligibleSubscriptions = await Subscription.find({
+        payementStatus: "Completed",
+        $or: [
+            { startDate: { $lte: now }, endDate: { $gt: now } },
+            { endDate: { $lte: now }, graceUntil: { $gt: now }, cancelAtPeriodEnd: { $ne: true } },
+        ],
+    }).distinct("owner_id");
+    const shops = await Boutiks.find({
         isActive: { $ne: false },
         $or: [
             { freeAccessEndsAt: { $gt: now } },
-            { freeAccessEndsAt: { $exists: false }, freeAccessStartedAt: { $gt: new Date(now.getTime() - 30 * 86400000) } },
-            { freeAccessEndsAt: { $exists: false }, freeAccessStartedAt: { $exists: false }, createdAt: { $gt: new Date(now.getTime() - 30 * 86400000) } },
-            { owner_id: { $in: paidOwnerIds } },
+            { freeAccessEndsAt: { $exists: false }, freeAccessStartedAt: { $gt: freeAccessFallback } },
+            { freeAccessEndsAt: { $exists: false }, freeAccessStartedAt: { $exists: false }, createdAt: { $gt: freeAccessFallback } },
+            { owner_id: { $in: eligibleSubscriptions } },
         ],
     }).distinct("_id");
-    return ids.map((id) => String(id));
+    return shops.map((id) => String(id));
 }
 
 const isBoutikPubliclyEligible = async (shop: any): Promise<boolean> => {
@@ -76,4 +81,6 @@ const isBoutikPubliclyEligible = async (shop: any): Promise<boolean> => {
     }));
 }
 
-export {create_boutiks,delete_boutiks, updateBoutiks, findBoutiks, addNewCategorie, getActiveBoutikIds, isBoutikPubliclyEligible};
+const getPublicBoutikIds = getActiveBoutikIds;
+
+export {create_boutiks,delete_boutiks, updateBoutiks, findBoutiks, addNewCategorie, getActiveBoutikIds, getPublicBoutikIds, isBoutikPubliclyEligible};

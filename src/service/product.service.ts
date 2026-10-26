@@ -1,7 +1,13 @@
-import { FilterQuery } from "mongoose";
 import IProduct from "../interface/product.interface";
 import Product from "../model/product.model";
-import { getActiveBoutikIds } from "./boutiks.service";
+import { getPublicBoutikIds } from "./boutiks.service";
+
+const publicProductFilter = async (extra: Record<string, unknown> = {}) => {
+  const activeBoutikIds = await getPublicBoutikIds();
+  return activeBoutikIds.length
+    ? { publicationStatus: "Approved", boutiks_id: { $in: activeBoutikIds }, ...extra }
+    : null;
+};
 
 const create_product = async (product: IProduct): Promise<IProduct | null> => {
   try {
@@ -13,17 +19,9 @@ const create_product = async (product: IProduct): Promise<IProduct | null> => {
 };
 
 const getAllProduct = async (): Promise<IProduct[] | null> => {
-  try {
-    const activeBoutikIds = await getActiveBoutikIds();
-    if (!activeBoutikIds.length) return [];
-    const products = await Product.find({
-      publicationStatus: "Approved",
-      boutiks_id: { $in: activeBoutikIds },
-    }).lean<IProduct[]>().populate("boutiks_id");
-    return products ? products : null;
-  } catch (error) {
-    throw error;
-  }
+  const filter = await publicProductFilter();
+  if (!filter) return [];
+  return Product.find(filter).lean<IProduct[]>().populate("boutiks_id");
 };
 
 const getBoutiksProduct = async (
@@ -54,34 +52,44 @@ const listBoutiksProducts = async (ownerId: string, options: { page: number; lim
 const getAllProductInCategory = async (
   slug: string,
 ): Promise<IProduct[] | null> => {
-  try {
-    const activeBoutikIds = await getActiveBoutikIds();
-    if (!activeBoutikIds.length) return [];
-    const products = await Product.find({
-      category: slug,
-      publicationStatus: "Approved",
-      boutiks_id: { $in: activeBoutikIds },
-    }).lean<IProduct[]>().populate("boutiks_id");
-    return products ? products : null;
-  } catch (error) {
-    throw error;
-  }
+  const filter = await publicProductFilter({ category: slug });
+  if (!filter) return [];
+  return Product.find(filter).lean<IProduct[]>().populate("boutiks_id");
 };
 
 const listPublicProducts = async (options: { page: number; limit: number; q?: string; location?: string; category?: string; sort?: string; minPrice?: number; maxPrice?: number }) => {
-  const activeBoutikIds = await getActiveBoutikIds();
-  if (!activeBoutikIds.length) return { data: [], pagination: { page: options.page, limit: options.limit, total: 0, pages: 0 } };
-  const filter: any = { publicationStatus: "Approved", boutiks_id: { $in: activeBoutikIds } };
-  if (options.category) filter.category = options.category;
+  const filter: any = await publicProductFilter(options.category ? { category: options.category } : {});
+  if (!filter) return { data: [], pagination: { page: options.page, limit: options.limit, total: 0, pages: 0 } };
   if (options.minPrice !== undefined || options.maxPrice !== undefined) {
     filter.price = {};
     if (options.minPrice !== undefined) filter.price.$gte = options.minPrice;
     if (options.maxPrice !== undefined) filter.price.$lte = options.maxPrice;
   }
-  if (options.q) { const safe = options.q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); filter.$or = [{ name: { $regex: safe, $options: "i" } }, { description: { $regex: safe, $options: "i" } }, { details: { $regex: safe, $options: "i" } }]; }
-  if (options.location) { const safe = options.location.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); const shops = await (await import("../model/boutiks.model")).default.find({ _id: { $in: activeBoutikIds }, ville: { $regex: safe, $options: "i" } }).distinct("_id"); filter.boutiks_id = { $in: shops }; }
+  if (options.q) {
+    const safe = options.q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    filter.$or = [
+      { name: { $regex: safe, $options: "i" } },
+      { description: { $regex: safe, $options: "i" } },
+      { details: { $regex: safe, $options: "i" } },
+    ];
+  }
+  if (options.location) {
+    const safe = options.location.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const shops = await (await import("../model/boutiks.model")).default
+      .find({ _id: { $in: filter.boutiks_id.$in }, ville: { $regex: safe, $options: "i" } })
+      .distinct("_id");
+    filter.boutiks_id = { $in: shops };
+  }
   const sort: Record<string, 1 | -1> = options.sort === "price_asc" ? { price: 1, _id: 1 } : options.sort === "price_desc" ? { price: -1, _id: -1 } : options.sort === "oldest" ? { createdAt: 1, _id: 1 } : { createdAt: -1, _id: -1 };
-  const [data, total] = await Promise.all([Product.find(filter).sort(sort).skip((options.page - 1) * options.limit).limit(options.limit).populate("boutiks_id").lean(), Product.countDocuments(filter)]);
+  const [data, total] = await Promise.all([
+    Product.find(filter)
+      .sort(sort)
+      .skip((options.page - 1) * options.limit)
+      .limit(options.limit)
+      .populate("boutiks_id")
+      .lean(),
+    Product.countDocuments(filter),
+  ]);
   return { data, pagination: { page: options.page, limit: options.limit, total, pages: Math.ceil(total / options.limit) } };
 };
 
@@ -228,7 +236,7 @@ const deleteVariant = async (
 const searchProduct = async(q: string, location?:string): Promise<IProduct | IProduct[] | [] > =>{
   if (!q?.trim()) return [];
   const safeQuery = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const activeBoutikIds = await getActiveBoutikIds();
+  const activeBoutikIds = await getPublicBoutikIds();
   let product = await Product.find({
     publicationStatus: "Approved",
     boutiks_id: { $in: activeBoutikIds },
