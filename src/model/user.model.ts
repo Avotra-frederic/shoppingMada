@@ -51,6 +51,7 @@ const userScheme = new Schema<IUser>({
     },
     preferences: {
         language: { type: String, enum: ["fr", "en"] },
+        theme: { type: String, enum: ["light", "dark"] },
         currency: { type: String, enum: ["MGA", "EUR", "USD"], default: "MGA" },
         notifications: {
             orders: { type: Boolean, default: true },

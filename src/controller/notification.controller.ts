@@ -36,6 +36,12 @@ const updateUserPreferences = expressAsyncHandler(async (req: Request, res: Resp
     }
     updates["preferences.language"] = body.language;
   }
+  if (body.theme !== undefined) {
+    if (!( ["light", "dark"].includes(body.theme))) {
+      res.status(400).json({ status: "Failed", message: "Thème invalide." }); return;
+    }
+    updates["preferences.theme"] = body.theme;
+  }
   if (body.notifications !== undefined) {
     if (!body.notifications || ["orders", "support", "promotions"].some((key) => typeof body.notifications[key] !== "boolean")) {
       res.status(400).json({ status: "Failed", message: "Préférences de notification invalides." }); return;
