@@ -133,6 +133,17 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     res.status(400).json({ status: "Error", message: "Vous pouvez joindre jusqu’à 5 images." });
     return;
   }
+  if (err.statusCode === 415) {
+    res.status(415).json({ status: "Error", message: err.message || "Le format de l’image n’est pas pris en charge." });
+    return;
+  }
+  if (err.code === "ENOENT" || err.code === "EACCES" || err.code === "ENOSPC") {
+    const message = err.code === "ENOSPC"
+      ? "Le stockage du serveur est plein. Réessayez plus tard ou contactez l’administrateur."
+      : "Le serveur ne peut pas écrire les images dans son dossier de stockage. Contactez l’administrateur.";
+    res.status(507).json({ status: "Error", message });
+    return;
+  }
   const status = err.statusCode || err.status || 500;
   res.status(status).json({ status: "Error", message: status < 500 ? err.message : "Une erreur interne est survenue." });
 });

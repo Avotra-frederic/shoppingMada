@@ -45,7 +45,7 @@ const uploadProductImages = multer({
         const imageMime = file.mimetype.toLowerCase().startsWith("image/");
         const genericMimeWithImageExtension = ["application/octet-stream", "binary/octet-stream", ""].includes(file.mimetype.toLowerCase()) && knownImageExtension;
         if (imageMime || genericMimeWithImageExtension) cb(null, true);
-        else cb(Object.assign(new Error("Choisissez un fichier image."), { statusCode: 415 }));
+        else cb(Object.assign(new Error("Format d’image non accepté. Utilisez JPEG, PNG, WebP, AVIF, HEIC/HEIF, GIF, TIFF ou SVG."), { statusCode: 415 }));
     },
     limits: { files: 5, fileSize: 20 * 1024 * 1024 },
 }).array("image", 5);
