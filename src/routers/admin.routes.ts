@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createAdminCategory, getAdminCurrencyRates, getFinancialReport, getSellerEntitlements, listAdminAudit, listAdminCategories, listAdminPlans, recordAdminRefund, startSellerImpersonation, stopSellerImpersonation, updateAdminCurrencyRates, updateAdminPlan, getAdminOperationsOverview, getSeller360, updateSellerCommission, getSellerPayoutReport, recordSellerPayout, exportAdminData, listAdminStaff, setAdminStaffRole, requestAdminStepUp, verifyAdminStepUp } from "../controller/admin.controller";
+import { createAdminCategory, getAdminCurrencyRates, getFinancialReport, getSellerEntitlements, listAdminAudit, listAdminCategories, listAdminPlans, recordAdminRefund, startSellerImpersonation, stopSellerImpersonation, updateAdminCurrencyRates, updateAdminPlan, getAdminOperationsOverview, getSeller360, updateSellerCommission, getSellerPayoutReport, recordSellerPayout, exportAdminData, listAdminStaff, setAdminStaffRole, requestAdminStepUp, verifyAdminStepUp, updateAdminCategoryTranslation } from "../controller/admin.controller";
 import { auth } from "../middleware/auth.middleware";
 import requireAdminStepUp from "../middleware/admin-step-up.middleware";
 import { facebookConnectCandidates, facebookConnectSelect, facebookConnectStart, facebookDisconnect, facebookOAuthCallback, facebookProducts, facebookPublishProduct, facebookStatus } from "../controller/facebook-admin.controller";
@@ -10,6 +10,7 @@ adminRoutes.post("/admin/step-up/verify", auth, verifyAdminStepUp);
 adminRoutes.get("/admin/audit", auth, listAdminAudit);
 adminRoutes.get("/admin/categories", auth, listAdminCategories);
 adminRoutes.post("/admin/categories", auth, requireAdminStepUp, createAdminCategory);
+adminRoutes.put("/admin/categories/:slug/translations", auth, requireAdminStepUp, updateAdminCategoryTranslation);
 adminRoutes.get("/admin/plans", auth, listAdminPlans);
 adminRoutes.put("/admin/plans/:key", auth, requireAdminStepUp, updateAdminPlan);
 adminRoutes.get("/seller/entitlements", auth, getSellerEntitlements);

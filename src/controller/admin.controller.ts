@@ -59,7 +59,7 @@ const createAdminCategory = expressAsyncHandler(async (req: Request, res: Respon
   if (await get_user_group_name({ user_id: new Types.ObjectId(String(user._id)) }) !== "Super Admin") {
     res.status(403).json({ status: "Failed", message: "Accès réservé au Super Admin." }); return;
   }
-  const { name, slug, parentSlug } = req.body ?? {};
+  const { name, slug, parentSlug, translations } = req.body ?? {};
   if (typeof name !== "string" || name.trim().length < 2 || name.trim().length > 80 || typeof slug !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || (parentSlug !== undefined && (typeof parentSlug !== "string" || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(parentSlug)))) {
     res.status(400).json({ status: "Failed", message: "Nom, identifiant ou catégorie parente invalide." }); return;
   }
@@ -67,12 +67,36 @@ const createAdminCategory = expressAsyncHandler(async (req: Request, res: Respon
   if (!baseUrl) { res.status(503).json({ status: "Failed", message: "L’URL de CategoryApi n’est pas configurée côté backend." }); return; }
   const token = process.env.CATEGORY_API_ADMIN_TOKEN;
   const endpoint = parentSlug ? `${baseUrl}/${encodeURIComponent(parentSlug)}/add` : `${baseUrl}/store/category`;
-  const response = await fetch(endpoint, { method: "POST", headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim(), slug }) });
+  const normalizedTranslations = translations && typeof translations === "object" ? {
+    ...(typeof translations.fr === "string" && translations.fr.trim() ? { fr: translations.fr.trim().slice(0, 120) } : {}),
+    ...(typeof translations.en === "string" && translations.en.trim() ? { en: translations.en.trim().slice(0, 120) } : {}),
+  } : undefined;
+  const response = await fetch(endpoint, { method: "POST", headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim(), slug, ...(normalizedTranslations ? { translations: normalizedTranslations } : {}) }) });
   const result: any = await response.json().catch(() => ({}));
   if (!response.ok) { res.status(response.status === 409 ? 409 : 502).json({ status: "Failed", message: result.message || "Création de la catégorie impossible." }); return; }
   const category = result.category;
   await recordAdminAction({ actorId: String(user._id), actorName: user.username ?? "Super Admin", action: "category.created", targetType: "category", targetId: String(category?._id ?? slug), targetLabel: name.trim(), reason: parentSlug ? `parent:${parentSlug}` : "catégorie racine", ip: req.ip });
   res.status(201).json({ status: "Success", message: "Catégorie créée.", data: category });
+});
+
+const updateAdminCategoryTranslation = expressAsyncHandler(async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  if (await get_user_group_name({ user_id: new Types.ObjectId(String(user._id)) }) !== "Super Admin") {
+    res.status(403).json({ status: "Failed", message: "Accès réservé au Super Admin." }); return;
+  }
+  const slug = String(req.params.slug ?? "");
+  const { fr } = req.body ?? {};
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || typeof fr !== "string" || fr.trim().length > 120) {
+    res.status(400).json({ status: "Failed", message: "Libellé français invalide (120 caractères maximum)." }); return;
+  }
+  const baseUrl = process.env.CATEGORY_API_URL?.replace(/\/$/, "");
+  if (!baseUrl) { res.status(503).json({ status: "Failed", message: "L’URL de CategoryApi n’est pas configurée côté backend." }); return; }
+  const token = process.env.CATEGORY_API_ADMIN_TOKEN;
+  const response = await fetch(`${baseUrl}/${encodeURIComponent(slug)}/translations`, { method: "PUT", headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), "Content-Type": "application/json" }, body: JSON.stringify({ fr: fr.trim() }) });
+  const result: any = await response.json().catch(() => ({}));
+  if (!response.ok) { res.status(response.status === 404 ? 404 : 502).json({ status: "Failed", message: result.message || "Enregistrement de la traduction impossible." }); return; }
+  await recordAdminAction({ actorId: String(user._id), actorName: user.username ?? "Super Admin", action: "category.translation.updated", targetType: "category", targetId: slug, targetLabel: fr.trim(), ip: req.ip });
+  res.status(200).json({ status: "Success", message: "Traduction française enregistrée.", data: result.category });
 });
 
 const requireSuperAdmin = async (req: Request, res: Response) => {
@@ -450,4 +474,4 @@ const setAdminStaffRole = expressAsyncHandler(async (req: Request, res: Response
   res.status(200).json({ status: "Success", data: { userId: req.params.userId, role: "Admin", permissions } });
 });
 
-export { listAdminAudit, listAdminCategories, createAdminCategory, listAdminPlans, updateAdminPlan, getSellerEntitlements, startSellerImpersonation, stopSellerImpersonation, getFinancialReport, recordAdminRefund, getAdminCurrencyRates, updateAdminCurrencyRates, getAdminOperationsOverview, getSeller360, updateSellerCommission, getSellerPayoutReport, recordSellerPayout, exportAdminData, listAdminStaff, setAdminStaffRole, requestAdminStepUp, verifyAdminStepUp };
+export { listAdminAudit, listAdminCategories, createAdminCategory, updateAdminCategoryTranslation, listAdminPlans, updateAdminPlan, getSellerEntitlements, startSellerImpersonation, stopSellerImpersonation, getFinancialReport, recordAdminRefund, getAdminCurrencyRates, updateAdminCurrencyRates, getAdminOperationsOverview, getSeller360, updateSellerCommission, getSellerPayoutReport, recordSellerPayout, exportAdminData, listAdminStaff, setAdminStaffRole, requestAdminStepUp, verifyAdminStepUp };
