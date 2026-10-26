@@ -22,7 +22,7 @@ import {
 } from "../service/product.service";
 import path from "path";
 import fs from "fs";
-import { findBoutiks } from "../service/boutiks.service";
+import { findBoutiks, isBoutikPubliclyEligible } from "../service/boutiks.service";
 import { deleteProductCommand } from "../service/command.service";
 import xss from "xss";
 import { get_user_group_name } from "../service/user_group_member.service";
@@ -142,15 +142,6 @@ const storeProduct = expressAsyncHandler(
       .json({ status: "Success", message: "Produit enregistré et envoyé pour approbation." });
   },
 );
-
-const isBoutikPubliclyEligible = async (shop: any): Promise<boolean> => {
-  if (!shop || shop.isActive === false) return false;
-  const now = new Date();
-  if (shop.freeAccessEndsAt && new Date(shop.freeAccessEndsAt).getTime() > now.getTime()) return true;
-  if (!shop.freeAccessEndsAt && new Date(shop.freeAccessStartedAt ?? shop.createdAt).getTime() + 30 * 86400000 > now.getTime()) return true;
-  const Subscription = (await import("../model/abonnement.model")).default;
-  return Boolean(await Subscription.exists({ owner_id: shop.owner_id, payementStatus: "Completed", $or: [{ startDate: { $lte: now }, endDate: { $gt: now } }, { endDate: { $lte: now }, graceUntil: { $gt: now }, cancelAtPeriodEnd: { $ne: true } }] }));
-};
 
 const getProduct = expressAsyncHandler(async (req: Request, res: Response) => {
   const category = req.params.category ?? (typeof req.query.category === "string" ? req.query.category.trim().slice(0, 100) : undefined);

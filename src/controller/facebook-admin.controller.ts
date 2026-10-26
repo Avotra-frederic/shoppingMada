@@ -9,7 +9,7 @@ import Product from "../model/product.model";
 import FacebookPageConnection from "../model/facebook-page-connection.model";
 import FacebookOAuthTransaction from "../model/facebook-oauth-transaction.model";
 import FacebookPublication from "../model/facebook-publication.model";
-import { getActiveBoutikIds } from "../service/boutiks.service";
+import { getActiveBoutikIds, isBoutikPubliclyEligible } from "../service/boutiks.service";
 
 const graphVersion = () => (process.env.META_GRAPH_API_VERSION || "v26.0").replace(/^v?/, "v");
 const graphBase = () => `https://graph.facebook.com/${graphVersion()}`;
@@ -139,16 +139,20 @@ export const facebookProducts = expressAsyncHandler(async (req: Request, res: Re
   const activeBoutikIds = await getActiveBoutikIds();
   const filter: any = { publicationStatus: "Approved", boutiks_id: { $in: activeBoutikIds } };
   if (q) filter.name = { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
-  const [products, total, connectionResult] = await Promise.all([
-    Product.find(filter).select("name description price photos boutiks_id createdAt updatedAt moderatedAt").populate("boutiks_id", "name isActive").sort({ updatedAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).lean(),
-    Product.countDocuments(filter), FacebookPageConnection.findOne({ connectionKey: "primary" }).select("pageId").lean(),
+  const [allMatchingProducts, connectionResult] = await Promise.all([
+    Product.find(filter).select("name description price photos boutiks_id createdAt updatedAt moderatedAt").populate("boutiks_id", "name isActive owner_id freeAccessEndsAt freeAccessStartedAt createdAt").sort({ updatedAt: -1, _id: -1 }).lean(),
+    FacebookPageConnection.findOne({ connectionKey: "primary" }).select("pageId").lean(),
   ]);
+  const eligibleProducts = await Promise.all(allMatchingProducts.map(async (product: any) => ({ product, eligible: await isBoutikPubliclyEligible(product.boutiks_id) })));
+  const allVisibleProducts = eligibleProducts.filter(({ eligible }) => eligible).map(({ product }) => product);
+  const total = allVisibleProducts.length;
+  const visibleProducts = allVisibleProducts.slice((page - 1) * limit, page * limit);
   const connection: any = connectionResult;
-  const publications = connection ? await FacebookPublication.find({ pageId: connection.pageId, productId: { $in: products.map((product: any) => product._id) } }).sort({ createdAt: -1 }).lean() : [];
+  const publications = connection ? await FacebookPublication.find({ pageId: connection.pageId, productId: { $in: visibleProducts.map((product: any) => product._id) } }).sort({ createdAt: -1 }).lean() : [];
   const byProduct = new Map<string, any>();
   publications.forEach((publication: any) => { const id = String(publication.productId); if (!byProduct.has(id)) byProduct.set(id, publication); });
   const pages = Math.ceil(total / limit);
-  res.json({ status: "Success", data: products.map((product: any) => ({ ...product, publication: byProduct.get(String(product._id)) || null })), pagination: { page, limit, total, pages, hasNextPage: page < pages, hasPreviousPage: page > 1 } });
+  res.json({ status: "Success", data: visibleProducts.map((product: any) => ({ ...product, publication: byProduct.get(String(product._id)) || null })), pagination: { page, limit, total, pages, hasNextPage: page < pages, hasPreviousPage: page > 1 } });
 });
 
 export const facebookPublishProduct = expressAsyncHandler(async (req: Request, res: Response) => {
