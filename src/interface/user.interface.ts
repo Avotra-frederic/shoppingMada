@@ -21,7 +21,7 @@ export default interface IUser extends Document
     boutiks_id? : Types.ObjectId | string,
     personnalInfo_id : Types.ObjectId
     userGroupMember_id:Types.ObjectId
-    preferences?: { language?: "fr" | "en"; theme?: "light" | "dark"; currency?: "MGA" | "EUR" | "USD"; notifications?: { orders?: boolean; support?: boolean; promotions?: boolean } };
+    preferences?: { language?: "fr" | "en"; theme?: "light" | "dark" | "system"; currency?: "MGA" | "EUR" | "USD"; notifications?: { orders?: boolean; support?: boolean; promotions?: boolean } };
     savedAddresses?: Array<{ _id?: Types.ObjectId | string; label?: string; recipientName: string; phone: string; address: string; city?: string }>;
 }
 export type LeanUser = Omit<IUser, '_id'> & { _id: Types.ObjectId };

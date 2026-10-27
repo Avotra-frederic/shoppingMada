@@ -26,7 +26,8 @@
     "scripts": {
         "dev": "nodemon -r dotenv/config src/index.ts",
         "start": "node -r dotenv/config build/index.js",
-        "build": "tsc"
+    "build": "tsc",
+    "test:theme": "npm run build && node --test src/__test__/services/theme-preference.test.mjs"
     },
     "devDependencies": {
         "@types/bcryptjs": "^2.4.6",

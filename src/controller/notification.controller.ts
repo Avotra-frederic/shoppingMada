@@ -4,6 +4,7 @@ import { Types } from "mongoose";
 import Notification from "../model/notification.model";
 import PlatformSettings from "../model/platform-settings.model";
 import User from "../model/user.model";
+import { isThemePreference } from "../service/theme-preference.service";
 
 const listNotifications = expressAsyncHandler(async (req: Request, res: Response) => {
   const user = (req as any).user;
@@ -37,7 +38,7 @@ const updateUserPreferences = expressAsyncHandler(async (req: Request, res: Resp
     updates["preferences.language"] = body.language;
   }
   if (body.theme !== undefined) {
-    if (!( ["light", "dark"].includes(body.theme))) {
+    if (!( ["light", "dark", "system"].includes(body.theme))) {
       res.status(400).json({ status: "Failed", message: "Thème invalide." }); return;
     }
     updates["preferences.theme"] = body.theme;
@@ -54,6 +55,25 @@ const updateUserPreferences = expressAsyncHandler(async (req: Request, res: Resp
   const updated = await User.findByIdAndUpdate(user._id, { $set: updates }, { new: true, runValidators: true }).select("preferences");
   if (!updated) { res.status(500).json({ status: "Failed", message: "Impossible d’enregistrer les préférences." }); return; }
   res.status(200).json({ status: "Success", message: "Préférences enregistrées.", data: updated.preferences });
+});
+
+const updateThemePreference = expressAsyncHandler(async (req: Request, res: Response) => {
+  const theme = req.body?.theme;
+  if (!isThemePreference(theme)) {
+    res.status(400).json({ status: "Failed", message: "Valeur de thème invalide." });
+    return;
+  }
+  const user = (req as any).user;
+  const updated = await User.findByIdAndUpdate(
+    user._id,
+    { $set: { "preferences.theme": theme } },
+    { new: true, runValidators: true },
+  ).select("preferences.theme");
+  if (!updated) {
+    res.status(404).json({ status: "Failed", message: "Compte introuvable." });
+    return;
+  }
+  res.status(200).json({ status: "Success", data: { theme: updated.preferences?.theme ?? theme } });
 });
 
 const getCurrencyRates = expressAsyncHandler(async (_req: Request, res: Response) => {
@@ -80,4 +100,4 @@ const deleteSavedAddress = expressAsyncHandler(async (req: Request, res: Respons
   res.status(200).json({ status: "Success", data: user?.savedAddresses ?? [] });
 });
 
-export { listNotifications, markNotificationRead, updateUserPreferences, getCurrencyRates, getSavedAddresses, addSavedAddress, deleteSavedAddress };
+export { listNotifications, markNotificationRead, updateUserPreferences, updateThemePreference, getCurrencyRates, getSavedAddresses, addSavedAddress, deleteSavedAddress };

@@ -3,9 +3,11 @@ import app from "./config/app";
 import user_group_migration from "./migration/user_group.migration";
 import { processExpiredMarketplaceOrders } from "./service/marketplace-order.service";
 import { processSubscriptionLifecycle } from "./controller/subscription.controller";
+import migrateThemePreference from "./migration/theme-preference.migration";
 const port = Number(process.env.PORT ?? 3000);
 connection().then(async()=>{
     await user_group_migration();
+    await migrateThemePreference();
     const expireOrders = () => {
         void processExpiredMarketplaceOrders().catch(() => {
             console.error("Le traitement des expirations de commandes a échoué.");
